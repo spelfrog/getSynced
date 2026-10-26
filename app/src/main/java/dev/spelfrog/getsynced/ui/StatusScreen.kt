@@ -131,7 +131,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) { sideItems(state, now, commitLimit = 10) }
+                    ) { sideItems(state, now, commitLimit = 9) }
                 }
             } else {
                 LazyColumn(
