@@ -99,6 +99,38 @@ fun validateRemoteUrl(url: String): UrlProblem? {
 }
 
 /** Comparable form of a remote URL: trimmed, no trailing "/" or ".git", lower case. */
+/**
+ * Desktop clones often use SSH remotes; the app can only speak HTTPS. git@github.com:o/r.git and
+ * ssh://git@host/o/r.git become https://host/o/r.git. Other forms are returned unchanged.
+ */
+fun sshToHttps(url: String): String {
+    val u = url.trim()
+    Regex("""^[\w.-]+@([\w.-]+):(.+)$""").matchEntire(u)?.let { m ->
+        return "https://${m.groupValues[1]}/${m.groupValues[2].trimStart('/')}"
+    }
+    Regex("""^ssh://(?:[\w.-]+@)?([\w.-]+)(?::\d+)?/(.+)$""").matchEntire(u)?.let { m ->
+        return "https://${m.groupValues[1]}/${m.groupValues[2]}"
+    }
+    return u
+}
+
+/** Folder "Obsidian Vault" vs repo "obsidian-vault": compare letters and digits only. */
+fun nameKey(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
+
+/**
+ * Picks the repository that best matches a folder name: exact key match first, then a repo whose key
+ * contains the folder key or vice versa (newest push wins because the list is ordered that way).
+ */
+fun matchRepoForFolder(folderName: String, repos: List<GitHubRepo>): GitHubRepo? {
+    val key = nameKey(folderName)
+    if (key.length < 3) return null
+    repos.firstOrNull { nameKey(it.fullName.substringAfter('/')) == key }?.let { return it }
+    return repos.firstOrNull { r ->
+        val rk = nameKey(r.fullName.substringAfter('/'))
+        rk.length >= 3 && (rk.contains(key) || key.contains(rk))
+    }
+}
+
 fun normalizeRemote(url: String?): String =
     url.orEmpty().trim().trimEnd('/').removeSuffix(".git").trimEnd('/').lowercase()
 
@@ -319,9 +351,28 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
             _folderState.value = state
             // An existing clone already knows its remote: take it over when the field is still empty.
             _existingRemote.value?.takeIf { it.isNotBlank() }?.let { url ->
-                if (_form.value.remoteUrl.isBlank()) _form.update { it.copy(remoteUrl = url) }
+                if (_form.value.remoteUrl.isBlank()) _form.update { it.copy(remoteUrl = sshToHttps(url)) }
             }
+            // A fresh folder: suggest the signed-in account's repo with a matching name.
+            if (state == FolderState.MISSING || state == FolderState.EMPTY) suggestRepoForFolder(path)
         }
+    }
+
+    /** Prefills remote URL + branch from the GitHub repo list when the folder name matches and the field is empty. */
+    private suspend fun suggestRepoForFolder(path: String) {
+        if (_form.value.remoteUrl.isNotBlank() || !_form.value.usesGitHub) return
+        val token = _form.value.token.trim()
+        if (token.isEmpty()) return
+        val repos = when (val cached = _repoList.value) {
+            is RepoListState.Loaded -> cached.repos
+            else -> withContext(Dispatchers.IO) {
+                runCatching { GitHubRepos().list(token) }.getOrNull()
+            }?.also { _repoList.value = RepoListState.Loaded(it) } ?: return
+        }
+        val folderName = File(path).name
+        val match = matchRepoForFolder(folderName, repos) ?: return
+        // Re-check: the user may have typed meanwhile.
+        if (_form.value.remoteUrl.isBlank()) selectRepo(match)
     }
 
     /** Starts the GitHub device flow; progress is in [githubAuth], the result lands in the form (token + login). */
