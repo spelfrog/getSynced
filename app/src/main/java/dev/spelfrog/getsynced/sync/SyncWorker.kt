@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -95,8 +96,18 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             authorName = settings.authorName,
             authorEmail = settings.authorEmail,
             branch = settings.branch.ifBlank { null },
-            deviceName = Build.MODEL ?: "android",
+            deviceName = deviceName(),
         )
+    }
+
+    /** The user-visible device name ("Raphaels S22") from system settings, else the model ("SM-S908B"). */
+    private fun deviceName(): String {
+        val userName = try {
+            Settings.Global.getString(applicationContext.contentResolver, "device_name")
+        } catch (_: Throwable) {
+            null
+        }
+        return userName?.trim()?.takeIf { it.isNotEmpty() } ?: Build.MODEL ?: "android"
     }
 
     private fun onUpdate(run: SyncRun) {

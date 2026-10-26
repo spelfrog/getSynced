@@ -6,6 +6,7 @@ import dev.spelfrog.getsynced.git.MergeOutcome
 import dev.spelfrog.getsynced.git.PushOutcome
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -16,9 +17,16 @@ import java.util.Locale
  * The sync algorithm (see plan): check, commit, fetch, merge, push (with one retry).
  * Pure Kotlin + JGit, no Android dependencies, so it is unit-tested on the JVM.
  *
- * [beforePush] is a test hook invoked right before every push attempt.
+ * [beforePush] / [beforeFetch] are test hooks invoked right before every push / fetch attempt (inside the
+ * network retry, so a throw from them counts as that attempt failing). Fetch and Push are retried once after
+ * [retryDelayMs] on transient network errors (see [Transient]); [sleep] is injectable so tests do not wait.
  */
-class SyncEngine(private val beforePush: suspend () -> Unit = {}) {
+class SyncEngine(
+    private val beforePush: suspend () -> Unit = {},
+    private val beforeFetch: suspend () -> Unit = {},
+    private val retryDelayMs: Long = 2000,
+    private val sleep: suspend (Long) -> Unit = { delay(it) },
+) {
 
     /** Thrown inside a step to end it as FAILED with a precise message (no exception class prefix). */
     private class StepFailure(message: String) : Exception(message)
@@ -104,8 +112,11 @@ class SyncEngine(private val beforePush: suspend () -> Unit = {}) {
         suspend fun fetchMergePush(suffix: String): PushOutcome {
             val r = repo!!
             step("Fetch$suffix") { progress ->
-                val behind = withContext(Dispatchers.IO) { r.fetch(creds, progress) }
-                if (behind == 0) "up to date" else "$behind new ${plural(behind, "commit")}"
+                val (behind, retried) = withNetworkRetry(progress) {
+                    beforeFetch()
+                    withContext(Dispatchers.IO) { r.fetch(creds, progress) }
+                }
+                (if (behind == 0) "up to date" else "$behind new ${plural(behind, "commit")}") + retryNote(retried)
             }
             step("Merge$suffix") {
                 when (val m = withContext(Dispatchers.IO) { r.merge(config.authorName, config.authorEmail) }) {
@@ -132,14 +143,18 @@ class SyncEngine(private val beforePush: suspend () -> Unit = {}) {
                 }
             }
             return step("Push$suffix", headline = { "Push failed: $it" }) { progress ->
-                beforePush()
-                when (val p = withContext(Dispatchers.IO) { r.push(creds, progress) }) {
-                    PushOutcome.UpToDate -> StepResult<PushOutcome>(StepState.SKIPPED, "nothing to push", p)
+                val (p, retried) = withNetworkRetry(progress) {
+                    beforePush()
+                    withContext(Dispatchers.IO) { r.push(creds, progress) }
+                }
+                val note = retryNote(retried)
+                when (p) {
+                    PushOutcome.UpToDate -> StepResult<PushOutcome>(StepState.SKIPPED, "nothing to push$note", p)
                     is PushOutcome.Pushed -> {
                         pushed += p.commits
-                        StepResult<PushOutcome>(StepState.OK, "pushed ${p.commits} ${plural(p.commits, "commit")}", p)
+                        StepResult<PushOutcome>(StepState.OK, "pushed ${p.commits} ${plural(p.commits, "commit")}$note", p)
                     }
-                    is PushOutcome.Rejected -> StepResult<PushOutcome>(StepState.FAILED, "rejected: ${p.message}", p)
+                    is PushOutcome.Rejected -> StepResult<PushOutcome>(StepState.FAILED, "rejected: ${p.message}$note", p)
                 }
             }.value
         }
@@ -174,7 +189,11 @@ class SyncEngine(private val beforePush: suspend () -> Unit = {}) {
                 withContext(Dispatchers.IO) {
                     val st = r.status()
                     if (st.isClean) return@withContext Skip("nothing to commit")
-                    val sha = r.commitAll(commitMessage(config.deviceName), config.authorName, config.authorEmail)
+                    val sha = r.commitAll(
+                        { changes -> CommitMessage.build(config.deviceName, changes) },
+                        config.authorName,
+                        config.authorEmail,
+                    )
                         ?: return@withContext Skip("nothing to commit")
                     "${st.changedCount} changed, ${st.deleted} deleted ($sha) · ${r.lastCommitTimings}"
                 }
@@ -205,9 +224,30 @@ class SyncEngine(private val beforePush: suspend () -> Unit = {}) {
     /** A step result whose state is chosen by the step itself (Push: OK / SKIPPED / FAILED-but-retry). */
     private class StepResult<T>(val state: StepState, val detail: String, val value: T)
 
+    /**
+     * Runs a network call with one automatic retry on transient network errors, showing the retry in the step
+     * detail via [progress]. Returns the result and whether a retry was needed.
+     */
+    private suspend fun <T> withNetworkRetry(progress: (String) -> Unit, block: suspend () -> T): Pair<T, Boolean> {
+        var retried = false
+        val value = Transient.retryOnce(
+            delayMs = retryDelayMs,
+            onRetry = { t ->
+                retried = true
+                progress("network error, retrying… (${Transient.shortMessage(t)})")
+            },
+            sleep = sleep,
+            block = block,
+        )
+        return value to retried
+    }
+
+    private fun retryNote(retried: Boolean): String = if (retried) " (after 1 retry)" else ""
+
     companion object {
-        fun commitMessage(deviceName: String, now: LocalDateTime = LocalDateTime.now()): String =
-            "sync from $deviceName ${now.truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}"
+        /** Kept for callers of the old API; see [CommitMessage.build]. */
+        fun commitMessage(deviceName: String, changes: ChangeSet, now: LocalDateTime = LocalDateTime.now()): String =
+            CommitMessage.build(deviceName, changes, now)
 
         internal fun describe(t: Throwable): String {
             val parts = mutableListOf<String>()

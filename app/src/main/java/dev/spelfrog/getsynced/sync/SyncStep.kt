@@ -43,6 +43,6 @@ data class SyncConfig(
     val authorEmail: String,
     /** Branch to sync; null = current branch of the repo. */
     val branch: String? = null,
-    /** Used in the commit message: "sync from <deviceName> <time>". */
+    /** Used as the commit subject prefix: "<deviceName>: edited note.md". */
     val deviceName: String = "android",
 )

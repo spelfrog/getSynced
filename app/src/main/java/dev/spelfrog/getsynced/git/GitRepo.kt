@@ -1,5 +1,6 @@
 package dev.spelfrog.getsynced.git
 
+import dev.spelfrog.getsynced.sync.ChangeSet
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.MergeCommand
 import org.eclipse.jgit.api.MergeResult.MergeStatus
@@ -159,8 +160,11 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
     var lastCommitTimings: String = ""
         private set
 
-    /** add -A (incl. deletions) + commit. Returns short sha, or null if the tree was clean. */
-    fun commitAll(message: String, authorName: String, authorEmail: String): String? {
+    /**
+     * add -A (incl. deletions) + commit. [messageFor] gets the staged changes and returns the commit message.
+     * Returns short sha, or null if the tree was clean.
+     */
+    fun commitAll(messageFor: (ChangeSet) -> String, authorName: String, authorEmail: String): String? {
         val timings = mutableListOf<String>()
         fun <T> timed(label: String, block: () -> T): T {
             val t0 = System.currentTimeMillis()
@@ -179,6 +183,7 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
         val toAdd = (s.untracked + s.modified + s.added + s.changed).toSortedSet()
         val toRemove = (s.missing + s.removed).toSortedSet() - toAdd
         if (toAdd.isEmpty() && toRemove.isEmpty()) return null
+        val message = messageFor(changeSetOf(s))
         if (toAdd.isNotEmpty()) {
             timed("add ${toAdd.size}") {
                 val cmd = git.add()
@@ -202,6 +207,20 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
                 .call()
         }
         return commit.id.abbreviate(7).name()
+    }
+
+    /**
+     * What a commit of the whole working tree would contain. A path that is both added and deleted
+     * (e.g. removed from the index but still on disk) counts as modified; added/deleted win over modified.
+     */
+    private fun changeSetOf(s: org.eclipse.jgit.api.Status): ChangeSet {
+        val added = (s.untracked + s.added).toSortedSet()
+        val deleted = (s.missing + s.removed).toSortedSet()
+        val both = added intersect deleted
+        added -= both
+        deleted -= both
+        val modified = ((s.modified + s.changed + both).toSortedSet() - added - deleted).toSortedSet()
+        return ChangeSet(added = added.toList(), modified = modified.toList(), deleted = deleted.toList())
     }
 
     /** fetch origin. Returns number of commits on origin/<branch> that are not in HEAD. */

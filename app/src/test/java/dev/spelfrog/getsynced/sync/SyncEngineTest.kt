@@ -149,9 +149,48 @@ class SyncEngineTest {
         assertEquals("new\n", remoteFile("new.md"))
         assertFalse(File(desktop.repository.workTree, "b.md").exists())
         val msg = desktop.log().setMaxCount(1).call().first()
-        assertTrue(msg.fullMessage, msg.fullMessage.startsWith("sync from testphone 20"))
+        assertEquals("testphone: edited 1 note, added 1 note, deleted 1 note", msg.shortMessage)
+        assertTrue(msg.fullMessage, msg.fullMessage.startsWith("testphone: "))
+        assertTrue(msg.fullMessage, msg.fullMessage.contains("\n\nM a.md\nA new.md\nD b.md\nsynced 20"))
+        assertTrue(msg.fullMessage, msg.fullMessage.trimEnd().endsWith(" by getSynced"))
         assertEquals("Phone", msg.authorIdent.name)
         phoneGit().use { assertTrue(it.status().call().isClean) }
+    }
+
+    @Test
+    fun commitMessageNamesFilesAndKeepsObsidianInBody() {
+        File(phoneDir, "img").mkdirs()
+        File(phoneDir, "img/Streets.png").writeBytes(byteArrayOf(1, 2, 3))
+        File(phoneDir, ".obsidian").mkdirs()
+        File(phoneDir, ".obsidian/workspace.json").writeText("{}\n")
+        val run = sync()
+        assertEquals(run.dump(), SyncOutcome.OK, run.outcome)
+        assertEquals(3, remoteFile("img/Streets.png").length) // pulls the phone's push into the desktop clone
+        val msg = desktop.log().setMaxCount(1).call().first().fullMessage
+        assertTrue(msg, msg.startsWith("testphone: added img/Streets.png\n\n"))
+        assertTrue(msg, msg.contains("\nA .obsidian/workspace.json\n"))
+        assertTrue(msg, msg.contains("\nA img/Streets.png\n"))
+    }
+
+    @Test
+    fun commitAllReportsChangeSet() {
+        File(phoneDir, "a.md").writeText("phone edit\n")
+        File(phoneDir, "b.md").delete()
+        File(phoneDir, "sub").mkdirs()
+        File(phoneDir, "sub/new.md").writeText("new\n")
+        // Unstaged from the index but still on disk: removed + untracked, which is a modification.
+        phoneGit().use { it.rm().setCached(true).addFilepattern("a.md").call() }
+        var seen: ChangeSet? = null
+        val sha = GitRepo(phoneDir).use { r ->
+            r.commitAll({ c -> seen = c; "msg" }, "Phone", "phone@example.com")
+        }
+        assertNotNull(sha)
+        assertEquals(ChangeSet(added = listOf("sub/new.md"), modified = listOf("a.md"), deleted = listOf("b.md")), seen)
+        phoneGit().use { assertTrue(it.status().call().isClean) }
+        // Clean tree: no commit, messageFor not called.
+        seen = null
+        GitRepo(phoneDir).use { r -> assertEquals(null, r.commitAll({ c -> seen = c; "msg" }, "P", "p@e")) }
+        assertEquals(null, seen)
     }
 
     @Test
@@ -204,7 +243,7 @@ class SyncEngineTest {
         phoneGit().use { g ->
             assertTrue(g.status().call().isClean)
             assertEquals(RepositoryState.SAFE, g.repository.repositoryState)
-            assertTrue(g.log().setMaxCount(1).call().first().fullMessage.startsWith("sync from testphone"))
+            assertEquals("testphone: edited a.md, b.md", g.log().setMaxCount(1).call().first().shortMessage)
         }
         // Remote untouched.
         assertEquals("line 1\nDESKTOP\nline 3\n", remoteFile("a.md"))
