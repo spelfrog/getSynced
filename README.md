@@ -6,6 +6,14 @@ automation app sends it an intent. Its one promise: **it shows every step, never
 lists Commit, Fetch, Merge and Push with live progress, timings and the full error text when something fails,
 both in the app and in the notification.
 
+## Install
+
+**[Download the latest APK](https://github.com/spelfrog/getSynced/releases/latest/download/getSynced.apk)**
+(all releases: [Releases](https://github.com/spelfrog/getSynced/releases)). Open the file on the phone and allow
+installing from this source when asked. Updates install over the old version; settings are kept.
+
+The app is not on the Play Store because it needs *All files access* to run git on the vault folder.
+
 ## How a sync works
 
 1. **Check**: the repo exists, a remote and a token are configured, and the folder is writable. If not, the run

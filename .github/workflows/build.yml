@@ -100,10 +100,13 @@ jobs:
           test -f app/build/outputs/apk/release/app-release.apk \
             || { echo "::error::app-release.apk missing; is release signing wired into app/build.gradle.kts?"; ls app/build/outputs/apk/release; exit 1; }
           cp app/build/outputs/apk/release/app-release.apk "getSynced-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk getSynced.apk
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: getSynced-${{ github.ref_name }}.apk
+          files: |
+            getSynced-${{ github.ref_name }}.apk
+            getSynced.apk
           generate_release_notes: true
 
       - name: Remove keystore
