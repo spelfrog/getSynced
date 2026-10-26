@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.io.File
+import dev.spelfrog.getsynced.update.ReleaseInfo
+import dev.spelfrog.getsynced.update.UpdateState
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
@@ -38,6 +41,8 @@ data class StatusUiState(
     val commits: List<CommitInfo> = emptyList(),
     /** Trigger id ("manual", "open", ...) to a sentence for people ("Obsidian opened"). */
     val triggerLabels: Map<String, String> = emptyMap(),
+    /** Newer release on GitHub, if the foreground check found one. */
+    val update: ReleaseInfo? = null,
 ) {
     /** Human words for a [SyncRun.trigger] id; unknown ids are shown as they are. */
     fun triggerLabel(trigger: String): String = triggerLabels[trigger] ?: trigger
@@ -103,6 +108,7 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
         SyncTrigger.isWaiting(application),
         commits,
         triggerLabels,
+        UpdateState.available,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         StatusUiState(
@@ -113,8 +119,16 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
             enqueued = values[4] as Boolean,
             commits = values[5] as List<CommitInfo>,
             triggerLabels = values[6] as Map<String, String>,
+            update = values[7] as ReleaseInfo?,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatusUiState())
+
+    /** Foreground-only: called from the screen on ON_START. Throttled to one request per 6 h. */
+    fun checkForUpdate() {
+        viewModelScope.launch { UpdateState.checkIfDue(getApplication()) }
+    }
+
+    fun skipUpdate(release: ReleaseInfo) = UpdateState.skip(getApplication(), release)
 
     private fun appLabel(pkg: String): String? {
         if (pkg.isBlank()) return null

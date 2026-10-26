@@ -76,6 +76,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.spelfrog.getsynced.update.ReleaseInfo
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.spelfrog.getsynced.R
 import dev.spelfrog.getsynced.git.CommitInfo
 import dev.spelfrog.getsynced.sync.StepState
@@ -92,6 +97,15 @@ private const val ErrorMaxLines = 8
 fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Update check only while the app is open (ON_START), never from the background worker.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) viewModel.checkForUpdate()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // Notification permission is asked for in the Setup checklist only.
 
     Scaffold(
@@ -126,7 +140,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) { primaryItems(state, latest, now, onOpenSetup, onSync) }
+                    ) { primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate) }
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
@@ -140,7 +154,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    primaryItems(state, latest, now, onOpenSetup, onSync)
+                    primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate)
                     sideItems(state, now, commitLimit = 3)
                 }
             }
@@ -158,7 +172,11 @@ private fun LazyListScope.primaryItems(
     now: Long,
     onOpenSetup: () -> Unit,
     onSync: () -> Unit,
+    onSkipUpdate: (ReleaseInfo) -> Unit,
 ) {
+    state.update?.let { release ->
+        item(key = "update") { UpdateCard(release, onSkip = { onSkipUpdate(release) }) }
+    }
     if (!state.isConfigured) {
         item(key = "setup") { NotSetUpCard(onOpenSetup) }
     }

@@ -76,4 +76,7 @@
     <string name="step_state_done">done</string>
     <string name="step_state_failed">failed</string>
     <string name="step_state_skipped">skipped</string>
+    <string name="update_available">Update available: %1$s</string>
+    <string name="update_download">Download</string>
+    <string name="update_skip">Skip this version</string>
 </resources>
