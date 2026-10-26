@@ -235,11 +235,11 @@ private fun LazyListScope.primaryItems(
 /** [onCheckNow] null = the About footer is rendered elsewhere (two-pane: under the left column). */
 private fun LazyListScope.sideItems(state: StatusUiState, now: Long, commitLimit: Int, onCheckNow: (() -> Unit)?) {
     if (state.commits.isNotEmpty()) {
-        item(key = "commits") { CommitsCard(state.commits.take(commitLimit), now) }
+        item(key = "commits") { CommitsCard(state.commits, collapsedCount = commitLimit, now = now) }
     }
     val older = state.olderRuns
     if (older.isNotEmpty()) {
-        item(key = "history") { HistoryCard(older, state, now) }
+        item(key = "history") { HistoryCard(older, state, now, collapsedCount = StatusUiState.HISTORY_SHOWN) }
     }
     if (onCheckNow != null) item(key = "about") { AboutFooter(state.updateInfo, now, onCheckNow) }
 }
@@ -420,12 +420,14 @@ private fun SyncButton(state: StatusUiState, onClick: () -> Unit) {
 
 /** The vault's last few commits: short sha, message, author and relative time. */
 @Composable
-private fun CommitsCard(commits: List<CommitInfo>, now: Long) {
+private fun CommitsCard(commits: List<CommitInfo>, collapsedCount: Int, now: Long) {
     val colors = MaterialTheme.colorScheme
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val shown = if (expanded) commits else commits.take(collapsedCount)
     SketchCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.status_recent_commits), style = MaterialTheme.typography.titleMedium, color = colors.primary)
-            commits.forEach { c ->
+            shown.forEach { c ->
                 Row(verticalAlignment = Alignment.Top) {
                     Text(
                         c.sha,
@@ -449,6 +451,7 @@ private fun CommitsCard(commits: List<CommitInfo>, now: Long) {
                     }
                 }
             }
+            ExpandToggle(total = commits.size, shown = shown.size, expanded = expanded) { expanded = !expanded }
         }
     }
 }
@@ -513,7 +516,9 @@ private fun ErrorBlock(stepName: String?, detail: String) {
 }
 
 @Composable
-private fun HistoryCard(runs: List<SyncRun>, state: StatusUiState, now: Long) {
+private fun HistoryCard(runs: List<SyncRun>, state: StatusUiState, now: Long, collapsedCount: Int) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val shown = if (expanded) runs else runs.take(collapsedCount)
     SketchCard {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)) {
             Text(
@@ -522,11 +527,24 @@ private fun HistoryCard(runs: List<SyncRun>, state: StatusUiState, now: Long) {
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 4.dp),
             )
-            runs.forEachIndexed { i, run ->
+            shown.forEachIndexed { i, run ->
                 if (i > 0) HorizontalDivider(color = MaterialTheme.sketch.cardBorder)
                 HistoryRow(run, state.triggerLabel(run.trigger), now)
             }
+            ExpandToggle(total = runs.size, shown = shown.size, expanded = expanded) { expanded = !expanded }
         }
+    }
+}
+
+/** "Show N more" / "Show less" link under a list that is cut to a few rows. Hidden when nothing is cut. */
+@Composable
+private fun ExpandToggle(total: Int, shown: Int, expanded: Boolean, onToggle: () -> Unit) {
+    if (total <= shown && !expanded) return
+    TextButton(onClick = onToggle, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            if (expanded) stringResource(R.string.status_show_less)
+            else stringResource(R.string.status_show_n_more, total - shown),
+        )
     }
 }
 

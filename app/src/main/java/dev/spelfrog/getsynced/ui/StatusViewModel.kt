@@ -67,7 +67,7 @@ data class StatusUiState(
         get() {
             val latestId = latest?.id
             val older = if (latestId != null && history.firstOrNull()?.id == latestId) history.drop(1) else history
-            return older.take(HISTORY_SHOWN)
+            return older
         }
 
     companion object {
@@ -230,7 +230,7 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
         if (path.isBlank()) return emptyList()
         val dir = File(path)
         return runCatching {
-            if (!GitRepo.isRepo(dir)) emptyList() else GitRepo(dir).use { it.recentCommits(10) }
+            if (!GitRepo.isRepo(dir)) emptyList() else GitRepo(dir).use { it.recentCommits(30) }
         }.getOrDefault(emptyList())
     }
 }

@@ -134,4 +134,5 @@
         <item quantity="one">··· %1$d unchanged line ···</item>
         <item quantity="other">··· %1$d unchanged lines ···</item>
     </plurals>
+    <string name="status_show_n_more">Show %1$d more</string>
 </resources>
