@@ -33,7 +33,7 @@ sync on the phone fast-forwards.
 2. **Grant the permissions** from the checklist on the setup screen:
    - **All files access**: git needs real file paths, so the scoped storage APIs do not work.
    - **Notifications**: progress and results are shown there.
-   - **Accessibility** ("getSynced app watcher"): used only to notice which app is in front. On Android 13+,
+   - **Accessibility** ("getSynced" in the accessibility list): used only to notice which app is in front. On Android 13+,
      sideloaded apps cannot enable this right away. First open *Settings → Apps → getSynced → ⋮ (top right) →
      Allow restricted settings*, then enable the service under *Settings → Accessibility*. The service receives
      window change events only and never reads screen content.
