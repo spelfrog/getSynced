@@ -107,7 +107,7 @@ class CommitMessageTest {
     @Test
     fun deviceNameIsTrimmedAndDefaultsToPhone() {
         assertEquals("Raphaels S22: deleted a.md", subject(changes(deleted = listOf("a.md")), "  Raphaels S22 \n"))
-        assertEquals("phone: deleted a.md", subject(changes(deleted = listOf("a.md")), "   "))
+        assertEquals("local: deleted a.md", subject(changes(deleted = listOf("a.md")), "   "))
     }
 
     @Test

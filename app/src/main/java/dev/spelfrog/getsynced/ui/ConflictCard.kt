@@ -53,7 +53,7 @@ private val ChoicesSaver = Saver<Map<String, Side>, ArrayList<String>>(
 fun ConflictCard(info: ConflictInfo, busy: Boolean, onResolve: (Map<String, Side>) -> Unit) {
     val warning = MaterialTheme.sketch.warning
     var picked by rememberSaveable(info.remoteSha, stateSaver = ChoicesSaver) {
-        mutableStateOf(info.files.associate { it.path to Side.PHONE })
+        mutableStateOf(info.files.associate { it.path to Side.LOCAL })
     }
     // Only choices that are valid for the current file list count (Both is not offered for delete kinds).
     val choices = info.files.mapNotNull { f ->
@@ -79,9 +79,9 @@ fun ConflictCard(info: ConflictInfo, busy: Boolean, onResolve: (Map<String, Side
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
                 TextButton(
-                    onClick = { picked = info.files.associate { it.path to Side.PHONE } },
+                    onClick = { picked = info.files.associate { it.path to Side.LOCAL } },
                     enabled = enabled,
-                ) { Text(stringResource(R.string.conflict_keep_all_phone)) }
+                ) { Text(stringResource(R.string.conflict_keep_all_local)) }
                 TextButton(
                     onClick = { picked = info.files.associate { it.path to Side.REMOTE } },
                     enabled = enabled,
@@ -131,7 +131,7 @@ private fun ConflictFileRow(file: ConflictFile, selected: Side?, enabled: Boolea
             add(stringResource(kindText(file.kind)))
             if (file.binary) add(stringResource(R.string.conflict_binary))
             val sizes = listOfNotNull(
-                file.phoneSize?.let { stringResource(R.string.conflict_size_phone, formatBytes(it)) },
+                file.localSize?.let { stringResource(R.string.conflict_size_local, formatBytes(it)) },
                 file.remoteSize?.let { stringResource(R.string.conflict_size_remote, formatBytes(it)) },
             )
             if (sizes.isNotEmpty()) add(sizes.joinToString(" · "))
@@ -139,7 +139,7 @@ private fun ConflictFileRow(file: ConflictFile, selected: Side?, enabled: Boolea
         Text(details.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
 
         val options = buildList {
-            add(Triple(Side.PHONE, R.string.conflict_side_phone, R.string.conflict_side_phone_cd))
+            add(Triple(Side.LOCAL, R.string.conflict_side_local, R.string.conflict_side_local_cd))
             add(Triple(Side.REMOTE, R.string.conflict_side_remote, R.string.conflict_side_remote_cd))
             if (file.canKeepBoth) add(Triple(Side.BOTH, R.string.conflict_side_both, R.string.conflict_side_both_cd))
         }
@@ -165,7 +165,7 @@ private fun ConflictFileRow(file: ConflictFile, selected: Side?, enabled: Boolea
 private fun kindText(kind: ConflictKind): Int = when (kind) {
     ConflictKind.BOTH_MODIFIED -> R.string.conflict_kind_both_modified
     ConflictKind.BOTH_ADDED -> R.string.conflict_kind_both_added
-    ConflictKind.DELETED_ON_PHONE -> R.string.conflict_kind_deleted_on_phone
+    ConflictKind.DELETED_LOCALLY -> R.string.conflict_kind_deleted_locally
     ConflictKind.DELETED_ON_REMOTE -> R.string.conflict_kind_deleted_on_remote
 }
 

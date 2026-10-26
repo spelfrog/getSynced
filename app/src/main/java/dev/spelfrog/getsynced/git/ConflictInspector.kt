@@ -44,7 +44,7 @@ internal object ConflictInspector {
                 val inRemote = blobAt(reader, path, remoteCommit.tree)
                 val inBase = baseTree?.let { blobAt(reader, path, it) }
                 val kind = when {
-                    inHead == null -> ConflictKind.DELETED_ON_PHONE
+                    inHead == null -> ConflictKind.DELETED_LOCALLY
                     inRemote == null -> ConflictKind.DELETED_ON_REMOTE
                     inBase == null -> ConflictKind.BOTH_ADDED
                     else -> ConflictKind.BOTH_MODIFIED
@@ -53,7 +53,7 @@ internal object ConflictInspector {
                     path = path,
                     kind = kind,
                     binary = listOfNotNull(inHead, inRemote).any { isBinary(reader, it) },
-                    phoneSize = inHead?.let { reader.getObjectSize(it, ObjectReader.OBJ_ANY) },
+                    localSize = inHead?.let { reader.getObjectSize(it, ObjectReader.OBJ_ANY) },
                     remoteSize = inRemote?.let { reader.getObjectSize(it, ObjectReader.OBJ_ANY) },
                 )
             }
@@ -88,10 +88,10 @@ internal object ConflictInspector {
         }
 
     /**
-     * "dir/a.md" -> "dir/a (phone).md", then "dir/a (phone 2).md" ... until [taken] returns false.
+     * "dir/a.md" -> "dir/a (local).md", then "dir/a (local 2).md" ... until [taken] returns false.
      * Names without an extension (or dotfiles) get the suffix at the end.
      */
-    fun phoneCopyName(path: String, taken: (String) -> Boolean): String {
+    fun localCopyName(path: String, taken: (String) -> Boolean): String {
         val slash = path.lastIndexOf('/')
         val dir = path.substring(0, slash + 1)
         val name = path.substring(slash + 1)
@@ -99,7 +99,7 @@ internal object ConflictInspector {
         val (stem, ext) = if (dot > 0) name.substring(0, dot) to name.substring(dot) else name to ""
         var i = 1
         while (true) {
-            val candidate = dir + stem + (if (i == 1) " (phone)" else " (phone $i)") + ext
+            val candidate = dir + stem + (if (i == 1) " (local)" else " (local $i)") + ext
             if (!taken(candidate)) return candidate
             i++
         }

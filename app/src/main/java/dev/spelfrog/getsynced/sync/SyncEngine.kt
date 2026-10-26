@@ -303,7 +303,7 @@ class SyncEngine(
         return Abort(
             SyncOutcome.CONFLICT,
             "Merge conflict in $n ${plural(n, "file")}: $list",
-            "${prefix}conflict in $n ${plural(n, "file")}: $list (nothing merged, phone commit kept)$note",
+            "${prefix}conflict in $n ${plural(n, "file")}: $list (nothing merged, local commit kept)$note",
             ConflictInfo(m.files, m.headSha, m.remoteSha),
         )
     }
@@ -336,12 +336,12 @@ class SyncEngine(
         private fun plural(n: Int, word: String) = if (n == 1) word else "${word}s"
 
         private fun sideLabel(side: Side): String = when (side) {
-            Side.PHONE -> "phone"
+            Side.LOCAL -> "local"
             Side.REMOTE -> "remote"
             Side.BOTH -> "both"
         }
 
-        /** "kept phone: a.md, c.md · kept remote: b.md · kept both: d.md" (empty groups left out). */
+        /** "kept local: a.md, c.md · kept remote: b.md · kept both: d.md" (empty groups left out). */
         internal fun describeChoices(choices: Map<String, Side>): String =
             Side.values().mapNotNull { side ->
                 val paths = choices.filterValues { it == side }.keys.sorted()

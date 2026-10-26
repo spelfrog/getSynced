@@ -331,7 +331,7 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
      * - No conflict (in memory): same as [merge].
      * - [choices] does not cover every conflicting path: returns Conflict, nothing is touched.
      * - Otherwise merges, resolves every conflicting path (PHONE = HEAD's version, REMOTE = the remote's,
-     *   BOTH = remote at the path plus HEAD's version as "<stem> (phone).<ext>"; a deletion wins by removing
+     *   BOTH = remote at the path plus HEAD's version as "<stem> (local).<ext>"; a deletion wins by removing
      *   the file) and commits a merge commit with both parents. BOTH on a delete/modify path keeps the side
      *   that still has the file. Returns Merged(commits pulled).
      * On any error the repository is reset hard to HEAD and the error rethrown.
@@ -376,12 +376,12 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
                         Side.BOTH -> when {
                             inHead != null && inRemote != null -> Side.BOTH
                             inRemote != null -> Side.REMOTE
-                            else -> Side.PHONE
+                            else -> Side.LOCAL
                         }
                         else -> c
                     }
                     when (side) {
-                        Side.PHONE -> if (inHead != null) fromHead += file.path else toRemove += file.path
+                        Side.LOCAL -> if (inHead != null) fromHead += file.path else toRemove += file.path
                         Side.REMOTE -> if (inRemote != null) fromRemote += file.path else toRemove += file.path
                         Side.BOTH -> {
                             fromRemote += file.path
@@ -401,7 +401,7 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
                     val written = mutableSetOf<String>()
                     val add = git.add()
                     for ((path, blob) in copies) {
-                        val copy = ConflictInspector.phoneCopyName(path) { candidate ->
+                        val copy = ConflictInspector.localCopyName(path) { candidate ->
                             candidate in written || File(repo.workTree, candidate).exists() || index.findEntry(candidate) >= 0
                         }
                         val target = File(repo.workTree, copy)

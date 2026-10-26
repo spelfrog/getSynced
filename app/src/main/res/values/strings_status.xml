@@ -70,19 +70,19 @@
     <!-- Conflict card -->
     <string name="conflict_title">Resolve conflict</string>
     <string name="conflict_history_note">The other version stays in the git history.</string>
-    <string name="conflict_keep_all_phone">Keep all phone</string>
+    <string name="conflict_keep_all_local">Keep all local</string>
     <string name="conflict_keep_all_remote">Keep all remote</string>
     <string name="conflict_kind_both_modified">edited on both sides</string>
     <string name="conflict_kind_both_added">added on both sides</string>
-    <string name="conflict_kind_deleted_on_phone">deleted on phone, edited elsewhere</string>
-    <string name="conflict_kind_deleted_on_remote">edited on phone, deleted elsewhere</string>
+    <string name="conflict_kind_deleted_locally">deleted locally, edited elsewhere</string>
+    <string name="conflict_kind_deleted_on_remote">edited locally, deleted elsewhere</string>
     <string name="conflict_binary">binary</string>
-    <string name="conflict_size_phone">phone %1$s</string>
+    <string name="conflict_size_local">local %1$s</string>
     <string name="conflict_size_remote">remote %1$s</string>
-    <string name="conflict_side_phone">Phone</string>
+    <string name="conflict_side_local">Local</string>
     <string name="conflict_side_remote">Remote</string>
     <string name="conflict_side_both">Both</string>
-    <string name="conflict_side_phone_cd">%1$s: keep phone version</string>
+    <string name="conflict_side_local_cd">%1$s: keep local version</string>
     <string name="conflict_side_remote_cd">%1$s: keep remote version</string>
     <string name="conflict_side_both_cd">%1$s: keep both versions</string>
     <string name="conflict_resolve">Resolve and sync</string>

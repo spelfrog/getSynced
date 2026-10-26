@@ -2,10 +2,10 @@ package dev.spelfrog.getsynced.sync
 
 import kotlinx.serialization.Serializable
 
-/** Which side wins for one conflicting path. BOTH keeps the remote at the path and the phone copy as "<name> (phone).<ext>". */
-enum class Side { PHONE, REMOTE, BOTH }
+/** Which side wins for one conflicting path. BOTH keeps the remote at the path and the phone copy as "<name> (local).<ext>". */
+enum class Side { LOCAL, REMOTE, BOTH }
 
-enum class ConflictKind { BOTH_MODIFIED, BOTH_ADDED, DELETED_ON_PHONE, DELETED_ON_REMOTE }
+enum class ConflictKind { BOTH_MODIFIED, BOTH_ADDED, DELETED_LOCALLY, DELETED_ON_REMOTE }
 
 @Serializable
 data class ConflictFile(
@@ -13,7 +13,7 @@ data class ConflictFile(
     val kind: ConflictKind,
     val binary: Boolean,
     /** Blob sizes in bytes; null when that side deleted the file. */
-    val phoneSize: Long? = null,
+    val localSize: Long? = null,
     val remoteSize: Long? = null,
 ) {
     /** "Keep both" only makes sense when both sides still have the file. */

@@ -176,13 +176,13 @@ class ConflictResolveTest {
         assertEquals("Merge conflict in 2 files: a.md, b.md", run.summary)
         val merge = run.step("Merge")
         assertEquals(StepState.FAILED, merge.state)
-        assertEquals("conflict in 2 files: a.md, b.md (nothing merged, phone commit kept)", merge.detail)
+        assertEquals("conflict in 2 files: a.md, b.md (nothing merged, local commit kept)", merge.detail)
         assertFalse(run.steps.any { it.name == "Push" })
 
         val info = notNull(run.conflict)
         assertEquals(listOf("a.md", "b.md"), info.files.map { it.path })
         assertTrue(info.files.all { it.kind == ConflictKind.BOTH_MODIFIED && !it.binary })
-        assertEquals(phoneA.length.toLong(), info.files[0].phoneSize)
+        assertEquals(phoneA.length.toLong(), info.files[0].localSize)
         assertEquals(desktopA.length.toLong(), info.files[0].remoteSize)
         assertEquals(desktopHeadSha(), info.remoteSha)
         phoneGit().use { g -> assertEquals(g.repository.resolve("HEAD").name, info.headSha) }
@@ -197,18 +197,18 @@ class ConflictResolveTest {
     @Test
     fun keepPhonePushesMergeCommit() {
         val first = conflictOnA()
-        val run = sync(resolutionFor(first, "a.md" to Side.PHONE))
+        val run = sync(resolutionFor(first, "a.md" to Side.LOCAL))
         assertEquals(run.dump(), SyncOutcome.OK, run.outcome)
         assertEquals(listOf("Check", "Commit", "Fetch", "Resolve", "Push"), run.steps.map { it.name })
         assertEquals(StepState.SKIPPED, run.step("Commit").state)
-        assertEquals("kept phone: a.md (merged 1 commit)", run.step("Resolve").detail)
+        assertEquals("kept local: a.md (merged 1 commit)", run.step("Resolve").detail)
         assertEquals("pushed 2 commits", run.step("Push").detail) // phone commit + merge commit
         assertTrue(run.summary, run.summary.startsWith("pushed 2, pulled 1, "))
         assertNull(run.conflict)
 
         assertEquals(phoneA, phoneFileOrNull("a.md"))
         assertEquals(phoneA, remoteFileOrNull("a.md"))
-        assertRemoteHeadIsResolveMerge("phone a.md")
+        assertRemoteHeadIsResolveMerge("local a.md")
         assertPhoneClean("a.md")
         assertFollowUpIsNoOp()
     }
@@ -239,27 +239,27 @@ class ConflictResolveTest {
         File(phoneDir, "b.md").writeText("bee phone\n")
         val first = sync()
         assertEquals(first.dump(), SyncOutcome.CONFLICT, first.outcome)
-        val run = sync(resolutionFor(first, "a.md" to Side.PHONE, "b.md" to Side.REMOTE))
+        val run = sync(resolutionFor(first, "a.md" to Side.LOCAL, "b.md" to Side.REMOTE))
         assertEquals(run.dump(), SyncOutcome.OK, run.outcome)
-        assertEquals("kept phone: a.md · kept remote: b.md (merged 1 commit)", run.step("Resolve").detail)
+        assertEquals("kept local: a.md · kept remote: b.md (merged 1 commit)", run.step("Resolve").detail)
         assertEquals(phoneA, remoteFileOrNull("a.md"))
         assertEquals("bee desktop\n", remoteFileOrNull("b.md"))
         assertEquals(phoneA, phoneFileOrNull("a.md"))
         assertEquals("bee desktop\n", phoneFileOrNull("b.md"))
-        assertRemoteHeadIsResolveMerge("phone a.md", "remote b.md")
+        assertRemoteHeadIsResolveMerge("local a.md", "remote b.md")
         assertFollowUpIsNoOp()
     }
 
     /** Plan 6.5, phone deleted / desktop edited: PHONE keeps the deletion, REMOTE restores the file. */
     @Test
-    fun deletedOnPhoneKeepPhone() = deleteModify(phoneDeletes = true, side = Side.PHONE, expected = null)
+    fun deletedOnPhoneKeepPhone() = deleteModify(phoneDeletes = true, side = Side.LOCAL, expected = null)
 
     @Test
     fun deletedOnPhoneKeepRemote() = deleteModify(phoneDeletes = true, side = Side.REMOTE, expected = desktopA)
 
     /** Plan 6.5 reversed, phone edited / desktop deleted: PHONE keeps the edit, REMOTE keeps the deletion. */
     @Test
-    fun deletedOnRemoteKeepPhone() = deleteModify(phoneDeletes = false, side = Side.PHONE, expected = phoneA)
+    fun deletedOnRemoteKeepPhone() = deleteModify(phoneDeletes = false, side = Side.LOCAL, expected = phoneA)
 
     @Test
     fun deletedOnRemoteKeepRemote() = deleteModify(phoneDeletes = false, side = Side.REMOTE, expected = null)
@@ -276,9 +276,9 @@ class ConflictResolveTest {
         assertEquals(first.dump(), SyncOutcome.CONFLICT, first.outcome)
         val file = notNull(first.conflict).files.single()
         assertEquals("a.md", file.path)
-        assertEquals(if (phoneDeletes) ConflictKind.DELETED_ON_PHONE else ConflictKind.DELETED_ON_REMOTE, file.kind)
+        assertEquals(if (phoneDeletes) ConflictKind.DELETED_LOCALLY else ConflictKind.DELETED_ON_REMOTE, file.kind)
         assertFalse(file.canKeepBoth)
-        if (phoneDeletes) assertNull(file.phoneSize) else assertNull(file.remoteSize)
+        if (phoneDeletes) assertNull(file.localSize) else assertNull(file.remoteSize)
         assertPhoneClean("a.md")
         assertEquals(if (phoneDeletes) null else phoneA, phoneFileOrNull("a.md")) // worktree untouched
 
@@ -302,14 +302,14 @@ class ConflictResolveTest {
     @Test
     fun staleChoicesIgnoredWhenRemoteMoved() {
         val first = conflictOnA()
-        val stale = resolutionFor(first, "a.md" to Side.PHONE)
+        val stale = resolutionFor(first, "a.md" to Side.LOCAL)
         desktopPushChange("a.md" to "line 1\nDESKTOP AGAIN\nline 3\n")
 
         val run = sync(stale)
         assertEquals(run.dump(), SyncOutcome.CONFLICT, run.outcome)
         assertEquals(listOf("Check", "Commit", "Fetch", "Merge"), run.steps.map { it.name })
         assertEquals(
-            "conflict in 1 file: a.md (nothing merged, phone commit kept) · earlier choices discarded (remote moved)",
+            "conflict in 1 file: a.md (nothing merged, local commit kept) · earlier choices discarded (remote moved)",
             run.step("Merge").detail,
         )
         val info = notNull(run.conflict)
@@ -380,7 +380,7 @@ class ConflictResolveTest {
         val first = sync()
         assertEquals(first.dump(), SyncOutcome.CONFLICT, first.outcome)
         assertEquals(listOf("a.md"), notNull(first.conflict).paths())
-        val choices = resolutionFor(first, "a.md" to Side.PHONE)
+        val choices = resolutionFor(first, "a.md" to Side.LOCAL)
         // Before the user resolves, the phone also edits b.md: a second conflicting path, same remote commit.
         File(phoneDir, "b.md").writeText("bee phone\n")
 
@@ -390,7 +390,7 @@ class ConflictResolveTest {
         val resolve = run.step("Resolve")
         assertEquals(StepState.FAILED, resolve.state)
         assertEquals(
-            "choices do not cover every conflicting file; conflict in 2 files: a.md, b.md (nothing merged, phone commit kept)",
+            "choices do not cover every conflicting file; conflict in 2 files: a.md, b.md (nothing merged, local commit kept)",
             resolve.detail,
         )
         assertEquals("Merge conflict in 2 files: a.md, b.md", run.summary)
@@ -436,10 +436,10 @@ class ConflictResolveTest {
 
     @Test
     fun resolveMessageAndChoiceDescription() {
-        val choices = mapOf("b.md" to Side.REMOTE, "a.md" to Side.PHONE, "c.md" to Side.BOTH, "d.md" to Side.PHONE)
-        assertEquals("kept phone: a.md, d.md · kept remote: b.md · kept both: c.md", SyncEngine.describeChoices(choices))
+        val choices = mapOf("b.md" to Side.REMOTE, "a.md" to Side.LOCAL, "c.md" to Side.BOTH, "d.md" to Side.LOCAL)
+        assertEquals("kept local: a.md, d.md · kept remote: b.md · kept both: c.md", SyncEngine.describeChoices(choices))
         assertEquals(
-            "Merge origin/main (resolved on Pixel)\n\nphone a.md\nremote b.md\nboth c.md\nphone d.md",
+            "Merge origin/main (resolved on Pixel)\n\nlocal a.md\nremote b.md\nboth c.md\nlocal d.md",
             SyncEngine.resolveMessage("main", "Pixel", choices),
         )
         assertTrue(SyncEngine.sameCommit("0123456789abcdef0123456789abcdef01234567", "0123456"))

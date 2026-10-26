@@ -42,7 +42,7 @@ object CommitMessage {
     }
 
     fun build(deviceName: String, changes: ChangeSet, now: LocalDateTime = LocalDateTime.now()): String {
-        val device = deviceName.trim().replace(Regex("\\s+"), " ").ifEmpty { "phone" }
+        val device = deviceName.trim().replace(Regex("\\s+"), " ").ifEmpty { "local" }
         val groups: List<Pair<Kind, List<String>>> = listOf(
             Kind.EDITED to changes.modified,
             Kind.ADDED to changes.added,

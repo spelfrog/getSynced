@@ -131,7 +131,7 @@ class GitRepoConflictTest {
         val f = out.files.single()
         assertEquals(ConflictKind.BOTH_MODIFIED, f.kind)
         assertFalse(f.binary)
-        assertEquals(phoneA.length.toLong(), f.phoneSize)
+        assertEquals(phoneA.length.toLong(), f.localSize)
         assertEquals(deskA.length.toLong(), f.remoteSize)
         assertEquals(headBefore, out.headSha)
         assertEquals(desktop.repository.resolve(Constants.HEAD).name, out.remoteSha)
@@ -149,7 +149,7 @@ class GitRepoConflictTest {
     @Test
     fun keepPhone() {
         conflictOnA()
-        val out = resolve("a.md" to Side.PHONE)
+        val out = resolve("a.md" to Side.LOCAL)
         assertEquals(MergeOutcome.Merged(1), out)
         assertEquals(phoneA, phoneFile("a.md").readText())
         assertMergeCommitPushed()
@@ -176,7 +176,7 @@ class GitRepoConflictTest {
         phone.fetch(creds)
         val c = phone.merge() as MergeOutcome.Conflict
         assertEquals(listOf("a.md", "b.md"), c.paths)
-        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.PHONE, "b.md" to Side.REMOTE))
+        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.LOCAL, "b.md" to Side.REMOTE))
         assertEquals(phoneA, phoneFile("a.md").readText())
         assertEquals("desk bee\n", phoneFile("b.md").readText())
         assertMergeCommitPushed()
@@ -191,8 +191,8 @@ class GitRepoConflictTest {
         phone.fetch(creds)
         val c = phone.merge() as MergeOutcome.Conflict
         val f = c.files.single()
-        assertEquals(ConflictKind.DELETED_ON_PHONE, f.kind)
-        assertEquals(null, f.phoneSize)
+        assertEquals(ConflictKind.DELETED_LOCALLY, f.kind)
+        assertEquals(null, f.localSize)
         assertEquals(deskA.length.toLong(), f.remoteSize)
         assertFalse(f.canKeepBoth)
         assertFalse(phoneFile("a.md").exists())
@@ -206,7 +206,7 @@ class GitRepoConflictTest {
         val c = phone.merge() as MergeOutcome.Conflict
         val f = c.files.single()
         assertEquals(ConflictKind.DELETED_ON_REMOTE, f.kind)
-        assertEquals(phoneA.length.toLong(), f.phoneSize)
+        assertEquals(phoneA.length.toLong(), f.localSize)
         assertEquals(null, f.remoteSize)
         assertEquals(phoneA, phoneFile("a.md").readText())
     }
@@ -214,7 +214,7 @@ class GitRepoConflictTest {
     @Test
     fun deletedOnPhoneKeepPhone() {
         deletedOnPhone()
-        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.PHONE))
+        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.LOCAL))
         assertFalse(phoneFile("a.md").exists())
         assertMergeCommitPushed()
         assertFalse(desktopFile("a.md").exists())
@@ -232,7 +232,7 @@ class GitRepoConflictTest {
     @Test
     fun deletedOnRemoteKeepPhone() {
         deletedOnRemote()
-        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.PHONE))
+        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.LOCAL))
         assertEquals(phoneA, phoneFile("a.md").readText())
         assertMergeCommitPushed()
         assertEquals(phoneA, desktopFile("a.md").readText())
@@ -252,7 +252,7 @@ class GitRepoConflictTest {
         deletedOnRemote()
         assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.BOTH))
         assertEquals(phoneA, phoneFile("a.md").readText())
-        assertFalse(phoneFile("a (phone).md").exists())
+        assertFalse(phoneFile("a (local).md").exists())
         assertMergeCommitPushed()
     }
 
@@ -275,7 +275,7 @@ class GitRepoConflictTest {
         assertEquals("img.png", f.path)
         assertTrue(f.binary)
         assertEquals(ConflictKind.BOTH_MODIFIED, f.kind)
-        assertEquals(2500L, f.phoneSize)
+        assertEquals(2500L, f.localSize)
         assertEquals(3000L, f.remoteSize)
         assertArrayEquals(mine, phoneFile("img.png").readBytes())
         assertEquals(MergeOutcome.Merged(1), resolve("img.png" to Side.REMOTE))
@@ -289,22 +289,22 @@ class GitRepoConflictTest {
         conflictOnA()
         assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.BOTH))
         assertEquals(deskA, phoneFile("a.md").readText())
-        assertEquals(phoneA, phoneFile("a (phone).md").readText())
+        assertEquals(phoneA, phoneFile("a (local).md").readText())
         assertMergeCommitPushed()
         assertEquals(deskA, desktopFile("a.md").readText())
-        assertEquals(phoneA, desktopFile("a (phone).md").readText())
+        assertEquals(phoneA, desktopFile("a (local).md").readText())
     }
 
     @Test
     fun keepBothPicksFreeName() {
-        desktopWrite("a (phone).md" to "older copy\n")
+        desktopWrite("a (local).md" to "older copy\n")
         desktopCommitPush()
         phone.fetch(creds)
         assertTrue(phone.merge() is MergeOutcome.FastForward)
         conflictOnA()
         assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.BOTH))
-        assertEquals("older copy\n", phoneFile("a (phone).md").readText())
-        assertEquals(phoneA, phoneFile("a (phone 2).md").readText())
+        assertEquals("older copy\n", phoneFile("a (local).md").readText())
+        assertEquals(phoneA, phoneFile("a (local 2).md").readText())
         assertMergeCommitPushed()
     }
 
@@ -316,7 +316,7 @@ class GitRepoConflictTest {
         phone.fetch(creds)
         val c = phone.merge() as MergeOutcome.Conflict
         assertEquals(ConflictKind.BOTH_ADDED, c.files.single().kind)
-        assertEquals(MergeOutcome.Merged(1), resolve("new.md" to Side.PHONE))
+        assertEquals(MergeOutcome.Merged(1), resolve("new.md" to Side.LOCAL))
         assertEquals("phone new\n", phoneFile("new.md").readText())
         assertMergeCommitPushed()
     }
@@ -356,7 +356,7 @@ class GitRepoConflictTest {
         assertTrue(phoneClean())
         assertFalse(phone.abortLeftoverMerge())
         // And resolving still works afterwards.
-        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.PHONE))
+        assertEquals(MergeOutcome.Merged(1), resolve("a.md" to Side.LOCAL))
         assertMergeCommitPushed()
     }
 
@@ -385,13 +385,13 @@ class GitRepoConflictTest {
     }
 
     @Test
-    fun phoneCopyNames() {
+    fun localCopyNames() {
         val none: (String) -> Boolean = { false }
-        assertEquals("a (phone).md", ConflictInspector.phoneCopyName("a.md", none))
-        assertEquals("dir/x.y/a (phone).tar", ConflictInspector.phoneCopyName("dir/x.y/a.tar", none))
-        assertEquals("Makefile (phone)", ConflictInspector.phoneCopyName("Makefile", none))
-        assertEquals(".gitignore (phone)", ConflictInspector.phoneCopyName(".gitignore", none))
-        assertEquals("a (phone 3).md",
-            ConflictInspector.phoneCopyName("a.md") { it == "a (phone).md" || it == "a (phone 2).md" })
+        assertEquals("a (local).md", ConflictInspector.localCopyName("a.md", none))
+        assertEquals("dir/x.y/a (local).tar", ConflictInspector.localCopyName("dir/x.y/a.tar", none))
+        assertEquals("Makefile (local)", ConflictInspector.localCopyName("Makefile", none))
+        assertEquals(".gitignore (local)", ConflictInspector.localCopyName(".gitignore", none))
+        assertEquals("a (local 3).md",
+            ConflictInspector.localCopyName("a.md") { it == "a (local).md" || it == "a (local 2).md" })
     }
 }

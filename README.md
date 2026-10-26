@@ -12,6 +12,15 @@ both in the app and in the notification.
 (all releases: [Releases](https://github.com/spelfrog/getSynced/releases)). Open the file on the phone and allow
 installing from this source when asked. Updates install over the old version; settings are kept.
 
+## Screenshots
+
+| | | |
+|:-:|:-:|:-:|
+| <img src="docs/screenshots/status.png" width="250"> | <img src="docs/screenshots/setup.png" width="250"> | <img src="docs/screenshots/setup-trigger.png" width="250"> |
+| Status with live steps | Setup | Triggers |
+
+On tablets and other wide screens the Status page switches to a two-column layout.
+
 ## How a sync works
 
 1. **Check**: the repo exists, a remote and a token are configured, and the folder is writable. If not, the run
