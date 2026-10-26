@@ -176,7 +176,7 @@ class SyncEngine(private val beforePush: suspend () -> Unit = {}) {
                     if (st.isClean) return@withContext Skip("nothing to commit")
                     val sha = r.commitAll(commitMessage(config.deviceName), config.authorName, config.authorEmail)
                         ?: return@withContext Skip("nothing to commit")
-                    "${st.changedCount} changed, ${st.deleted} deleted ($sha)"
+                    "${st.changedCount} changed, ${st.deleted} deleted ($sha) · ${r.lastCommitTimings}"
                 }
             }
 

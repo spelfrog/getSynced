@@ -140,7 +140,7 @@ class SyncEngineTest {
         assertEquals(run.dump(), SyncOutcome.OK, run.outcome)
         val commit = run.step("Commit")
         assertEquals(StepState.OK, commit.state)
-        assertTrue(commit.detail, Regex("""2 changed, 1 deleted \([0-9a-f]{7}\)""").matches(commit.detail))
+        assertTrue(commit.detail, Regex("""2 changed, 1 deleted \([0-9a-f]{7}\) · status .*add 2 .*rm 1 .*commit .*""").matches(commit.detail))
         assertEquals(StepState.OK, run.step("Push").state)
         assertEquals("pushed 1 commit", run.step("Push").detail)
         assertTrue(run.summary, run.summary.startsWith("pushed 1, pulled 0, "))

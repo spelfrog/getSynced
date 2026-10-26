@@ -52,6 +52,8 @@ sealed class PushOutcome {
  */
 class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
     companion object {
+        /** Set while hunting the "new files not seen" problem; prints to System.err. */
+        @Volatile var DEBUG_STATUS = false
         const val REMOTE = "origin"
         /** Network timeout in seconds for clone/fetch/push, so nothing hangs forever. */
         const val TIMEOUT_S = 60
@@ -132,6 +134,19 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
 
     fun status(): WorkingTreeStatus {
         val s = git.status().call()
+        if (DEBUG_STATUS) {
+            // Temporary diagnostics (System.err lands in logcat as "System.err").
+            val root = dir.listFiles().orEmpty()
+            System.err.println("GitRepo.status dir=$dir rootEntries=${root.size} " +
+                "untracked=${s.untracked} added=${s.added} modified=${s.modified} changed=${s.changed} " +
+                "missing=${s.missing} removed=${s.removed} ignored=${s.ignoredNotInIndex.take(20)}")
+            root.filter { it.name.contains("perf-test") }.forEach { f ->
+                val e = FS.DETECTED.list(dir, org.eclipse.jgit.treewalk.FileTreeIterator.DefaultFileModeStrategy.INSTANCE)
+                    .firstOrNull { it.name == f.name }
+                System.err.println("GitRepo.status probe ${f.name}: isFile=${f.isFile} len=${f.length()} " +
+                    "mtime=${f.lastModified()} jgitMode=${e?.mode} jgitLen=${e?.length}")
+            }
+        }
         return WorkingTreeStatus(
             added = s.added.size,
             modified = (s.changed + s.modified).size,
@@ -140,17 +155,52 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
         )
     }
 
+    /** Timings of the last [commitAll] as "status 1.2 s · add 0.3 s · add -u 0.1 s · commit 0.2 s". */
+    var lastCommitTimings: String = ""
+        private set
+
     /** add -A (incl. deletions) + commit. Returns short sha, or null if the tree was clean. */
     fun commitAll(message: String, authorName: String, authorEmail: String): String? {
-        if (status().isClean) return null
-        git.add().addFilepattern(".").call()
-        git.add().addFilepattern(".").setUpdate(true).call()
+        val timings = mutableListOf<String>()
+        fun <T> timed(label: String, block: () -> T): T {
+            val t0 = System.currentTimeMillis()
+            try {
+                return block()
+            } finally {
+                timings += "$label ${"%.1f".format(java.util.Locale.US, (System.currentTimeMillis() - t0) / 1000.0)} s"
+                lastCommitTimings = timings.joinToString(" · ")
+            }
+        }
+        // JGit 5.13's `add .` reads and hashes EVERY file in the tree, changed or not (AddCommand has no
+        // "unchanged, keep index entry" shortcut). On a 200 MB vault over Android's FUSE storage that is
+        // ~30 s per call. So we take the paths from status (which trusts index timestamps and is fast)
+        // and stage only those. A PathFilter walk still visits the tree but only reads matched files.
+        val s = timed("status") { git.status().call() }
+        val toAdd = (s.untracked + s.modified + s.added + s.changed).toSortedSet()
+        val toRemove = (s.missing + s.removed).toSortedSet() - toAdd
+        if (toAdd.isEmpty() && toRemove.isEmpty()) return null
+        if (toAdd.isNotEmpty()) {
+            timed("add ${toAdd.size}") {
+                val cmd = git.add()
+                toAdd.forEach { cmd.addFilepattern(it) }
+                cmd.call()
+            }
+        }
+        if (toRemove.isNotEmpty()) {
+            timed("rm ${toRemove.size}") {
+                val cmd = git.rm().setCached(true)
+                toRemove.forEach { cmd.addFilepattern(it) }
+                cmd.call()
+            }
+        }
         val ident = PersonIdent(authorName, authorEmail)
-        val commit = git.commit()
-            .setMessage(message)
-            .setAuthor(ident)
-            .setCommitter(ident)
-            .call()
+        val commit = timed("commit") {
+            git.commit()
+                .setMessage(message)
+                .setAuthor(ident)
+                .setCommitter(ident)
+                .call()
+        }
         return commit.id.abbreviate(7).name()
     }
 
