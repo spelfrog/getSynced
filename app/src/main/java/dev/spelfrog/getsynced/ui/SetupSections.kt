@@ -3,6 +3,7 @@ package dev.spelfrog.getsynced.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -22,11 +23,11 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -48,7 +49,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.spelfrog.getsynced.R
@@ -58,18 +58,29 @@ import dev.spelfrog.getsynced.sync.SyncRun
 /** Form edits are passed as transforms so each field only knows its own copy() call. */
 internal typealias FormEdit = ((SetupForm) -> SetupForm) -> Unit
 
+/** Field-sketch section: outlined box with a thin leader-line border and a reed-blue title. */
 @Composable
-internal fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth()) {
+internal fun SectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        border = BorderStroke(1.dp, MaterialTheme.sketch.cardBorder),
+        colors = CardDefaults.outlinedCardColors(),
+    ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            if (title.isNotEmpty()) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            }
             content()
         }
     }
 }
 
 @Composable
-private fun FormField(
+internal fun FormField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -78,6 +89,7 @@ private fun FormField(
     placeholder: String? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    enabled: Boolean = true,
     trailingIcon: @Composable (() -> Unit)? = null,
 ) {
     OutlinedTextField(
@@ -88,6 +100,7 @@ private fun FormField(
         supportingText = if (supporting != null) { { Text(supporting) } } else null,
         isError = isError,
         singleLine = true,
+        enabled = enabled,
         visualTransformation = visualTransformation,
         trailingIcon = trailingIcon,
         keyboardOptions = KeyboardOptions(
@@ -99,11 +112,26 @@ private fun FormField(
     )
 }
 
+/**
+ * Remote URL (GitHub picker first when signed in) plus the folder-remote mismatch warning.
+ * The sync's Check step writes the form URL into the folder's origin, so a silent mismatch would
+ * re-point the vault at another repository.
+ */
 @Composable
-internal fun RepositorySection(form: SetupForm, onEdit: FormEdit, onPickFromGitHub: (() -> Unit)? = null) {
-    SectionCard(stringResource(R.string.setup_section_repository)) {
+internal fun RepositorySection(
+    form: SetupForm,
+    folderState: FolderState,
+    existingRemote: String?,
+    mismatchAccepted: Boolean,
+    onEdit: FormEdit,
+    onPickFromGitHub: (() -> Unit)?,
+    onUseFolderRemote: () -> Unit,
+    onKeepMine: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SectionCard(stringResource(R.string.setup_section_repository), modifier) {
         if (onPickFromGitHub != null) {
-            OutlinedButton(onClick = onPickFromGitHub, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = onPickFromGitHub, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.List, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.setup_repo_pick_from_github))
@@ -123,29 +151,72 @@ internal fun RepositorySection(form: SetupForm, onEdit: FormEdit, onPickFromGitH
             isError = problem != null,
             keyboardType = KeyboardType.Uri,
         )
-        FormField(
-            value = form.branch,
-            onValueChange = { v -> onEdit { it.copy(branch = v) } },
-            label = stringResource(R.string.setup_branch),
-            supporting = stringResource(R.string.setup_branch_help),
-        )
+        val mismatch = folderState == FolderState.REPO &&
+            !existingRemote.isNullOrBlank() &&
+            remotesDiffer(existingRemote, form.remoteUrl) &&
+            !mismatchAccepted
+        if (mismatch) {
+            StatusLine(
+                Icons.Filled.Warning,
+                MaterialTheme.sketch.warning,
+                stringResource(R.string.setup_remote_mismatch, existingRemote.orEmpty()),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onUseFolderRemote,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.sketch.warning,
+                        contentColor = MaterialTheme.sketch.onWarning,
+                    ),
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.setup_remote_use_folder)) }
+                OutlinedButton(onClick = onKeepMine, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.setup_remote_keep_mine))
+                }
+            }
+        }
     }
 }
 
+/** Folder picker as the main action; the raw path is shown as text and only editable on request. */
 @Composable
-internal fun FolderSection(form: SetupForm, folderState: FolderState, existingRemote: String?, onEdit: FormEdit, onPick: () -> Unit) {
-    SectionCard(stringResource(R.string.setup_section_folder)) {
-        FormField(
-            value = form.vaultPath,
-            onValueChange = { v -> onEdit { it.copy(vaultPath = v) } },
-            label = stringResource(R.string.setup_folder_path),
-            placeholder = stringResource(R.string.setup_folder_placeholder),
-            keyboardType = KeyboardType.Uri,
-        )
-        OutlinedButton(onClick = onPick) {
+internal fun FolderSection(
+    form: SetupForm,
+    folderState: FolderState,
+    existingRemote: String?,
+    onEdit: FormEdit,
+    onPick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var editing by rememberSaveable { mutableStateOf(form.vaultPath.isBlank()) }
+    SectionCard(stringResource(R.string.setup_section_folder), modifier) {
+        Button(onClick = onPick, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.FolderOpen, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.setup_folder_choose))
+        }
+        if (editing || form.vaultPath.isBlank()) {
+            FormField(
+                value = form.vaultPath,
+                onValueChange = { v -> onEdit { it.copy(vaultPath = v) } },
+                label = stringResource(R.string.setup_folder_path),
+                placeholder = stringResource(R.string.setup_folder_placeholder),
+                keyboardType = KeyboardType.Uri,
+            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.setup_folder_path),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SelectionContainer {
+                        Text(form.vaultPath, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                TextButton(onClick = { editing = true }) { Text(stringResource(R.string.setup_folder_edit_path)) }
+            }
         }
         FolderStatusLine(folderState)
         if (folderState == FolderState.REPO) {
@@ -162,43 +233,27 @@ internal fun FolderSection(form: SetupForm, folderState: FolderState, existingRe
 @Composable
 private fun FolderStatusLine(state: FolderState) {
     val scheme = MaterialTheme.colorScheme
+    val success = MaterialTheme.sketch.success
     val (icon, color, text) = when (state) {
         FolderState.UNSET -> Triple(Icons.Filled.Info, scheme.onSurfaceVariant, R.string.setup_folder_unset)
         FolderState.CHECKING -> Triple(Icons.Filled.Info, scheme.onSurfaceVariant, R.string.setup_folder_checking)
         FolderState.NO_ACCESS -> Triple(Icons.Filled.Warning, scheme.error, R.string.setup_folder_no_access)
         FolderState.NOT_A_FOLDER -> Triple(Icons.Filled.Error, scheme.error, R.string.setup_folder_not_a_folder)
         FolderState.MISSING -> Triple(Icons.Filled.Folder, scheme.onSurfaceVariant, R.string.setup_folder_missing)
-        FolderState.EMPTY -> Triple(Icons.Filled.Folder, scheme.primary, R.string.setup_folder_empty)
+        FolderState.EMPTY -> Triple(Icons.Filled.Folder, success, R.string.setup_folder_empty)
         FolderState.HAS_FILES -> Triple(Icons.Filled.Error, scheme.error, R.string.setup_folder_has_files)
-        FolderState.REPO -> Triple(Icons.Filled.CheckCircle, scheme.primary, R.string.setup_folder_repo)
+        FolderState.REPO -> Triple(Icons.Filled.CheckCircle, success, R.string.setup_folder_repo)
     }
     StatusLine(icon, color, stringResource(text))
 }
 
+/** Icon plus wrapping caption; the icon sits on the first line. */
 @Composable
 internal fun StatusLine(icon: ImageVector, color: Color, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+    Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.padding(top = 1.dp).size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, color = color)
-    }
-}
-
-@Composable
-internal fun AuthorSection(form: SetupForm, onEdit: FormEdit) {
-    SectionCard(stringResource(R.string.setup_section_author)) {
-        FormField(
-            value = form.authorName,
-            onValueChange = { v -> onEdit { it.copy(authorName = v) } },
-            label = stringResource(R.string.setup_author_name),
-        )
-        FormField(
-            value = form.authorEmail,
-            onValueChange = { v -> onEdit { it.copy(authorEmail = v) } },
-            label = stringResource(R.string.setup_author_email),
-            supporting = stringResource(R.string.setup_author_help),
-            keyboardType = KeyboardType.Email,
-        )
+        Text(text, style = MaterialTheme.typography.bodySmall, color = color, modifier = Modifier.weight(1f))
     }
 }
 

@@ -4,6 +4,8 @@
     <string name="setup_done">Done</string>
     <string name="setup_cancel">Cancel</string>
     <string name="setup_copy">Copy</string>
+    <string name="setup_back">Back to status</string>
+    <string name="setup_autosave">Changes are saved automatically.</string>
 
     <!-- Permissions -->
     <string name="setup_section_permissions">Permissions</string>
@@ -18,6 +20,9 @@
     <string name="setup_perm_accessibility_why">Detects when the watched app opens or closes. No screen content is read.</string>
     <string name="setup_perm_restricted_note">Android 13+: if the toggle is greyed out, open App info → ⋮ → Allow restricted settings first.</string>
     <string name="setup_open_app_info">Open App info</string>
+    <string name="setup_perm_all_granted">All 3 permissions granted</string>
+    <string name="setup_perm_show">Show</string>
+    <string name="setup_perm_hide">Hide</string>
 
     <!-- Repository -->
     <string name="setup_section_repository">Repository</string>
@@ -27,16 +32,18 @@
     <string name="setup_remote_url_https_only">Only https:// URLs are supported</string>
     <string name="setup_remote_url_invalid">Not a valid URL</string>
     <string name="setup_section_auth">Authentication</string>
-    <string name="setup_auth_github">Sign in with GitHub</string>
+    <string name="setup_auth_github">GitHub sign-in</string>
     <string name="setup_auth_token">Access token</string>
     <string name="setup_github_client_id">GitHub App Client ID</string>
     <string name="setup_github_client_id_help">Public ID of a GitHub App or OAuth App with Device Flow enabled (see README). The default is prefilled.</string>
-    <string name="setup_github_client_id_missing">Enter the Client ID first.</string>
+    <string name="setup_github_client_id_missing">Enter the GitHub App Client ID under Advanced first.</string>
     <string name="setup_github_sign_in">Sign in with GitHub</string>
     <string name="setup_github_sign_in_again">Sign in again</string>
     <string name="setup_github_sign_out">Sign out</string>
     <string name="setup_github_signed_in">Signed in as %1$s</string>
     <string name="setup_github_token_expires">Token expires %1$s. Disable \"user-to-server token expiration\" in the GitHub App settings, or sign in again when it expires.</string>
+    <string name="setup_github_copy_code">Copy code</string>
+    <string name="setup_github_code_copied">Code copied ✓</string>
     <string name="setup_github_help">You get a short code to enter on github.com. No password and no secret is stored on the phone; the token is encrypted on this device.</string>
     <string name="setup_github_requesting">Asking GitHub for a code…</string>
     <string name="setup_github_enter_code">Enter this code on GitHub:</string>
@@ -64,8 +71,12 @@
     <string name="setup_folder_missing">Folder does not exist yet. It will be created when cloning.</string>
     <string name="setup_folder_empty">Empty folder, ready to clone into.</string>
     <string name="setup_folder_has_files">Folder has files but no git repository.</string>
-    <string name="setup_folder_repo">Git repository found. "Use existing repository" below adopts it as is.</string>
-    <string name="setup_folder_repo_remote">Its remote: %1$s (taken over as the remote URL if that field was empty).</string>
+    <string name="setup_folder_repo">Git repository found. It is adopted as is, nothing is cloned.</string>
+    <string name="setup_folder_repo_remote">Remote: %1$s</string>
+    <string name="setup_folder_edit_path">Edit path</string>
+    <string name="setup_remote_mismatch">This folder\'s git remote is %1$s, which differs from the Remote URL above. If you keep yours, the folder\'s origin is changed to your URL when you link the folder and on every sync.</string>
+    <string name="setup_remote_use_folder">Use folder\'s remote</string>
+    <string name="setup_remote_keep_mine">Keep mine</string>
     <string name="setup_folder_repo_no_remote">It has no remote yet; the remote URL above will be set on it.</string>
     <string name="setup_repo_pick_from_github">Choose from your GitHub repositories</string>
     <string name="setup_repo_picker_title">Your repositories</string>
@@ -74,6 +85,14 @@
     <string name="setup_repo_picker_retry">Retry</string>
     <string name="setup_repo_picker_empty">No repository matches.</string>
     <string name="setup_repo_picker_not_signed_in">Sign in with GitHub first.</string>
+
+    <!-- Advanced -->
+    <string name="setup_section_advanced">Advanced</string>
+    <string name="setup_advanced_summary">Commit author, branch, GitHub App Client ID</string>
+    <string name="setup_expand">Expand</string>
+    <string name="setup_collapse">Collapse</string>
+    <string name="setup_expanded">Expanded</string>
+    <string name="setup_collapsed">Collapsed</string>
 
     <!-- Author -->
     <string name="setup_section_author">Commit author</string>
@@ -87,6 +106,11 @@
     <string name="setup_trigger_none">None chosen. Tap to choose.</string>
     <string name="setup_sync_on_open">Sync when app opens</string>
     <string name="setup_sync_on_close">Sync when app closes</string>
+    <string name="setup_trigger_change_app">Change app</string>
+    <string name="setup_trigger_hint_both">Opening or closing %1$s starts a sync.</string>
+    <string name="setup_trigger_hint_open">Opening %1$s starts a sync.</string>
+    <string name="setup_trigger_hint_close">Closing %1$s starts a sync.</string>
+    <string name="setup_trigger_hint_none">%1$s does not start a sync. Use the Sync button instead.</string>
     <string name="setup_app_picker_title">Choose app</string>
     <string name="setup_app_picker_search">Search apps</string>
 
@@ -94,6 +118,12 @@
     <string name="setup_section_action">Repository on this phone</string>
     <string name="setup_clone">Clone into folder</string>
     <string name="setup_use_existing">Use existing repository</string>
+    <string name="setup_relink">Re-link folder</string>
+    <string name="setup_blocker_go">Go to section</string>
+    <plurals name="setup_things_left">
+        <item quantity="one">%d thing left</item>
+        <item quantity="other">%d things left</item>
+    </plurals>
     <string name="setup_need_url">Enter a valid https remote URL.</string>
     <string name="setup_need_token">Enter an access token.</string>
     <string name="setup_need_folder">Choose a vault folder.</string>

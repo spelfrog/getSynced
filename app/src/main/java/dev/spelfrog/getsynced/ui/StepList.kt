@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,17 +23,26 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.dp
+import dev.spelfrog.getsynced.R
 import dev.spelfrog.getsynced.sync.StepState
 import dev.spelfrog.getsynced.sync.SyncStep
 import kotlinx.coroutines.delay
 import java.util.Locale
+
+/** Vertical padding above the step name; the marker centre is derived from it and the name's line height. */
+private val RowTopPadding = 5.dp
 
 /**
  * One row per step, drawn like the annotations in a field sketch: a thin leader line with a dot marker
@@ -50,17 +60,62 @@ fun StepList(steps: List<SyncStep>, modifier: Modifier = Modifier) {
 @Composable
 private fun StepRow(step: SyncStep, isFirst: Boolean, isLast: Boolean) {
     val colors = MaterialTheme.colorScheme
-    val greyed = step.state == StepState.PENDING || step.state == StepState.SKIPPED
+    val nameStyle = MaterialTheme.typography.bodyLarge
+    val pending = step.state == StepState.PENDING
     val failed = step.state == StepState.FAILED
-    Row(Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
-        Marker(step.state, isFirst, isLast, Modifier.width(24.dp).fillMaxHeight())
+    val running = step.state == StepState.RUNNING
+
+    // Centre of the first text line, so the dot stays level with the name at any font scale.
+    val markerCenterPx = with(LocalDensity.current) {
+        val line = if (nameStyle.lineHeight.isSpecified) nameStyle.lineHeight else nameStyle.fontSize * 1.5f
+        RowTopPadding.toPx() + line.toPx() / 2f
+    }
+
+    val stateWord = stringResource(
+        when (step.state) {
+            StepState.PENDING -> R.string.step_state_pending
+            StepState.RUNNING -> R.string.step_state_running
+            StepState.OK -> R.string.step_state_done
+            StepState.FAILED -> R.string.step_state_failed
+            StepState.SKIPPED -> R.string.step_state_skipped
+        }
+    )
+    // The running row is a live region, so leave its ticking time out of the description.
+    val description = listOfNotNull(
+        step.name,
+        stateWord,
+        step.durationMs?.takeIf { !running }?.let { formatDuration(it) },
+        step.detail.takeIf { it.isNotBlank() },
+    ).joinToString(", ")
+
+    Row(
+        Modifier
+            .height(IntrinsicSize.Min)
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                if (running) liveRegion = LiveRegionMode.Polite
+            },
+        verticalAlignment = Alignment.Top,
+    ) {
+        Marker(step.state, isFirst, isLast, markerCenterPx, Modifier.width(24.dp).fillMaxHeight())
         Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f).padding(vertical = 5.dp)) {
-            Text(
-                text = step.name,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (greyed) colors.onSurfaceVariant else colors.onSurface,
-            )
+        Column(modifier = Modifier.weight(1f).padding(top = RowTopPadding, bottom = 5.dp)) {
+            Row {
+                Text(
+                    text = step.name,
+                    style = nameStyle,
+                    color = if (pending) colors.onSurfaceVariant else colors.onSurface,
+                    modifier = Modifier.weight(1f).alignByBaseline(),
+                )
+                Spacer(Modifier.width(8.dp))
+                val started = step.startedAt
+                Column(Modifier.alignByBaseline()) {
+                    when {
+                        running && started != null -> ElapsedText(started)
+                        step.durationMs != null -> DurationText(step.durationMs)
+                    }
+                }
+            }
             if (step.detail.isNotBlank()) {
                 Text(
                     text = step.detail,
@@ -71,20 +126,15 @@ private fun StepRow(step: SyncStep, isFirst: Boolean, isLast: Boolean) {
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
-        val started = step.startedAt
-        Column(Modifier.padding(top = 6.dp)) {
-            when {
-                step.state == StepState.RUNNING && started != null -> ElapsedText(started)
-                step.durationMs != null -> DurationText(step.durationMs)
-            }
-        }
     }
 }
 
-/** Dot marker on a vertical leader line. Running: pulsing glow. Pending/skipped: hollow. */
+/**
+ * Dot marker on a vertical leader line. Running: pulsing glow. Done: filled. Skipped: filled in the idle
+ * outline tint (done, nothing to do). Pending: hollow, on a dashed line.
+ */
 @Composable
-private fun Marker(state: StepState, isFirst: Boolean, isLast: Boolean, modifier: Modifier) {
+private fun Marker(state: StepState, isFirst: Boolean, isLast: Boolean, centerYPx: Float, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     val leader = colors.outline
     val dotColor = when (state) {
@@ -101,10 +151,10 @@ private fun Marker(state: StepState, isFirst: Boolean, isLast: Boolean, modifier
             label = "glowAlpha",
         ).value
     } else 0f
-    val dashed = state == StepState.PENDING || state == StepState.SKIPPED
+    val dashed = state == StepState.PENDING
     Canvas(modifier) {
         val cx = size.width / 2
-        val cy = 14.dp.toPx()
+        val cy = centerYPx
         val stroke = 1.2.dp.toPx()
         val effect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())) else null
         if (!isFirst) drawLine(leader, Offset(cx, 0f), Offset(cx, cy - 6.dp.toPx()), stroke, pathEffect = effect)
@@ -114,9 +164,9 @@ private fun Marker(state: StepState, isFirst: Boolean, isLast: Boolean, modifier
             drawCircle(dotColor.copy(alpha = pulse), radius = 6.dp.toPx(), center = Offset(cx, cy))
         }
         when (state) {
-            StepState.OK, StepState.RUNNING, StepState.FAILED ->
+            StepState.OK, StepState.RUNNING, StepState.FAILED, StepState.SKIPPED ->
                 drawCircle(dotColor, radius = 3.5.dp.toPx(), center = Offset(cx, cy))
-            StepState.PENDING, StepState.SKIPPED ->
+            StepState.PENDING ->
                 drawCircle(dotColor, radius = 3.dp.toPx(), center = Offset(cx, cy), style = Stroke(stroke))
         }
         if (state == StepState.FAILED) {
@@ -124,9 +174,6 @@ private fun Marker(state: StepState, isFirst: Boolean, isLast: Boolean, modifier
             val r = 6.dp.toPx()
             drawLine(dotColor, Offset(cx - r, cy - r), Offset(cx + r, cy + r), stroke)
             drawLine(dotColor, Offset(cx - r, cy + r), Offset(cx + r, cy - r), stroke)
-        }
-        if (state == StepState.SKIPPED) {
-            drawLine(Color.Transparent, Offset(cx, cy), Offset(cx, cy), 0f)
         }
     }
 }
@@ -148,10 +195,11 @@ private fun DurationText(ms: Long) {
         text = formatDuration(ms),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
     )
 }
 
-/** "0.3 s", "12.4 s", "2 min 05 s". */
+/** "0.3 s", "12.4 s", "2 min 05 s". Always Locale.US, like every number in the app. */
 fun formatDuration(ms: Long): String =
-    if (ms < 60_000) String.format(Locale.getDefault(), "%.1f s", ms / 1000.0)
-    else String.format(Locale.getDefault(), "%d min %02d s", ms / 60_000, (ms / 1000) % 60)
+    if (ms < 60_000) String.format(Locale.US, "%.1f s", ms / 1000.0)
+    else String.format(Locale.US, "%d min %02d s", ms / 60_000, (ms / 1000) % 60)

@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -95,6 +96,17 @@ fun validateRemoteUrl(url: String): UrlProblem? {
     val host = runCatching { Uri.parse(u).host }.getOrNull()
     if (host.isNullOrBlank() || u.any { it.isWhitespace() }) return UrlProblem.INVALID
     return null
+}
+
+/** Comparable form of a remote URL: trimmed, no trailing "/" or ".git", lower case. */
+fun normalizeRemote(url: String?): String =
+    url.orEmpty().trim().trimEnd('/').removeSuffix(".git").trimEnd('/').lowercase()
+
+/** True when both URLs are set and point at different remotes (ignoring case, trailing ".git" and "/"). */
+fun remotesDiffer(a: String?, b: String?): Boolean {
+    val na = normalizeRemote(a)
+    val nb = normalizeRemote(b)
+    return na.isNotEmpty() && nb.isNotEmpty() && na != nb
 }
 
 /**
@@ -173,6 +185,15 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
     /** Remote URL found in the .git of the chosen folder (FolderState.REPO), else null. */
     private val _existingRemote = MutableStateFlow<String?>(null)
     val existingRemote: StateFlow<String?> = _existingRemote.asStateFlow()
+
+    /** (folder remote, form remote) pair the user confirmed with "Keep mine"; normalized. */
+    private val _acceptedMismatch = MutableStateFlow<Pair<String, String>?>(null)
+
+    /** True while the user chose "Keep mine" for exactly the current folder remote / form remote pair. */
+    val remoteMismatchAccepted: StateFlow<Boolean> =
+        combine(_acceptedMismatch, _existingRemote, _form) { accepted, existing, f ->
+            accepted != null && accepted == (normalizeRemote(existing) to normalizeRemote(f.remoteUrl))
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val _githubAuth = MutableStateFlow<GitHubAuthState>(GitHubAuthState.Idle)
     val githubAuth: StateFlow<GitHubAuthState> = _githubAuth.asStateFlow()
@@ -363,6 +384,17 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectRepo(repo: GitHubRepo) {
         edit { it.copy(remoteUrl = repo.cloneUrl, branch = it.branch.ifBlank { repo.defaultBranch }) }
+    }
+
+    /** "Use folder's remote": copy the remote of the folder's .git into the form. */
+    fun useFolderRemote() {
+        val url = _existingRemote.value?.trim().orEmpty()
+        if (url.isNotEmpty()) edit { it.copy(remoteUrl = url) }
+    }
+
+    /** "Keep mine": hide the mismatch warning until the folder remote or the form URL changes. */
+    fun acceptRemoteMismatch() {
+        _acceptedMismatch.value = normalizeRemote(_existingRemote.value) to normalizeRemote(_form.value.remoteUrl)
     }
 
     fun cancelGitHubSignIn() {

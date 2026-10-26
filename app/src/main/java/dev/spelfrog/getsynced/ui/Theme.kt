@@ -11,6 +11,9 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -45,7 +48,25 @@ object Sketch {
     val Leader = Color(0xFF8A90A0)
     val Frame = Color(0xFF565D6B)
     val Ember = Color(0xFFE0A070)
+    val EmberDeep = Color(0xFFB8661E)
 }
+
+/** Role colours outside the Material scheme, same in both themes' spirit: success = reed, warning = ember. */
+data class SketchRoles(val success: Color, val warning: Color, val onWarning: Color, val cardBorder: Color)
+
+val LocalSketchRoles = staticCompositionLocalOf {
+    SketchRoles(success = Sketch.Reed, warning = Sketch.Ember, onWarning = Sketch.Stone, cardBorder = Sketch.Frame)
+}
+
+/** Accessor: `MaterialTheme.sketch.warning`. */
+val MaterialTheme.sketch: SketchRoles
+    @Composable @ReadOnlyComposable get() = LocalSketchRoles.current
+
+/** Content column width cap: phone widths fill, tablets and landscape get a readable measure. */
+val ContentMaxWidth = 640.dp
+
+/** Numbers that must line up (durations, times) use tabular lining figures. */
+const val TabularFigures = "tnum, lnum"
 
 private val DarkColors = darkColorScheme(
     primary = Sketch.Reed,
@@ -70,9 +91,9 @@ private val DarkColors = darkColorScheme(
     onSurface = Sketch.Parchment,
     surfaceVariant = Sketch.StoneLight,
     onSurfaceVariant = Sketch.Caption,
-    surfaceContainer = Sketch.StoneCard,
+    surfaceContainer = Color(0xFF22262E),
     surfaceContainerHigh = Sketch.StoneLight,
-    surfaceContainerHighest = Sketch.Inset,
+    surfaceContainerHighest = Color(0xFF2A2F39),
     surfaceContainerLow = Color(0xFF1B1E25),
     outline = Sketch.Leader,
     outlineVariant = Sketch.Frame,
@@ -122,10 +143,10 @@ private val SketchTypography = Typography(
     titleSmall = TextStyle(fontFamily = Serif, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp),
     bodyLarge = TextStyle(fontFamily = Serif, fontSize = 16.sp, lineHeight = 24.sp),
     bodyMedium = TextStyle(fontFamily = Serif, fontSize = 14.sp, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontFamily = Serif, fontSize = 12.sp, lineHeight = 17.sp),
-    labelLarge = TextStyle(fontFamily = Serif, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp),
-    labelMedium = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 12.sp, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 11.sp, lineHeight = 15.sp),
+    bodySmall = TextStyle(fontFamily = Serif, fontSize = 13.sp, lineHeight = 18.sp),
+    labelLarge = TextStyle(fontFamily = Serif, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp),
+    labelMedium = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 13.sp, lineHeight = 18.sp, fontFeatureSettings = TabularFigures),
+    labelSmall = TextStyle(fontFamily = Serif, fontSize = 12.sp, lineHeight = 16.sp, fontFeatureSettings = TabularFigures),
 )
 
 /** Sketches use boxes with barely rounded corners. */
@@ -152,5 +173,12 @@ fun GetSyncedTheme(
         darkTheme -> DarkColors
         else -> LightColors
     }
-    MaterialTheme(colorScheme = colorScheme, typography = SketchTypography, shapes = SketchShapes, content = content)
+    val roles = if (darkTheme) {
+        SketchRoles(success = Sketch.Reed, warning = Sketch.Ember, onWarning = Sketch.Stone, cardBorder = Sketch.Frame)
+    } else {
+        SketchRoles(success = Color(0xFF2F6F82), warning = Sketch.EmberDeep, onWarning = Color(0xFFFFFFFF), cardBorder = Color(0xFFBDB8A8))
+    }
+    CompositionLocalProvider(LocalSketchRoles provides roles) {
+        MaterialTheme(colorScheme = colorScheme, typography = SketchTypography, shapes = SketchShapes, content = content)
+    }
 }

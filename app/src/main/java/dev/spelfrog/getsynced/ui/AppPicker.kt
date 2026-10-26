@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -172,7 +175,7 @@ private fun AppListItem(app: LaunchableApp, isSelected: Boolean, onClick: () -> 
 
 /** "App to watch" row (opens the picker) plus the open/close switches. */
 @Composable
-internal fun TriggerSection(form: SetupForm, onEdit: FormEdit) {
+internal fun TriggerSection(form: SetupForm, onEdit: FormEdit, modifier: Modifier = Modifier) {
     var picking by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val px = iconPx()
@@ -181,10 +184,17 @@ internal fun TriggerSection(form: SetupForm, onEdit: FormEdit) {
         else withContext(Dispatchers.IO) { loadAppInfo(context, form.triggerPackage, px) }
     }
 
-    SectionCard(stringResource(R.string.setup_section_trigger)) {
+    SectionCard(stringResource(R.string.setup_section_trigger), modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().clickable { picking = true }.padding(vertical = 4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(
+                    onClickLabel = stringResource(R.string.setup_trigger_change_app),
+                    role = Role.Button,
+                ) { picking = true }
+                .padding(vertical = 4.dp),
         ) {
             AppIcon(app?.icon)
             Spacer(Modifier.width(12.dp))
@@ -203,6 +213,16 @@ internal fun TriggerSection(form: SetupForm, onEdit: FormEdit) {
         }
         SwitchRow(stringResource(R.string.setup_sync_on_open), form.syncOnOpen) { v -> onEdit { it.copy(syncOnOpen = v) } }
         SwitchRow(stringResource(R.string.setup_sync_on_close), form.syncOnClose) { v -> onEdit { it.copy(syncOnClose = v) } }
+        if (form.triggerPackage.isNotBlank()) {
+            val name = app?.label ?: form.triggerPackage
+            val hint = when {
+                form.syncOnOpen && form.syncOnClose -> stringResource(R.string.setup_trigger_hint_both, name)
+                form.syncOnOpen -> stringResource(R.string.setup_trigger_hint_open, name)
+                form.syncOnClose -> stringResource(R.string.setup_trigger_hint_close, name)
+                else -> stringResource(R.string.setup_trigger_hint_none, name)
+            }
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 
     if (picking) {
@@ -219,8 +239,15 @@ internal fun TriggerSection(form: SetupForm, onEdit: FormEdit) {
 
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+    ) {
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChange)
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = null)
     }
 }

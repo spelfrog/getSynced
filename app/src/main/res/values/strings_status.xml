@@ -20,8 +20,6 @@
     <string name="status_syncing">Syncing…</string>
     <string name="status_waiting_network">Waiting for network</string>
     <string name="status_never_synced">Not synced yet</string>
-    <string name="status_just_now">just now</string>
-    <string name="status_trigger">Trigger: %1$s</string>
     <string name="status_history">History</string>
     <string name="status_copy">Copy</string>
     <string name="status_copied">Copied</string>
@@ -32,4 +30,50 @@
     <string name="status_open_setup">Set up</string>
     <string name="status_recent_commits">Recent commits</string>
     <string name="status_commit_by">%1$s · %2$s</string>
+
+    <!-- Header card -->
+    <string name="status_up_to_date">Up to date</string>
+    <plurals name="status_sent_commits">
+        <item quantity="one">Sent %1$d commit</item>
+        <item quantity="other">Sent %1$d commits</item>
+    </plurals>
+    <plurals name="status_received_commits">
+        <item quantity="one">received %1$d commit</item>
+        <item quantity="other">received %1$d commits</item>
+    </plurals>
+    <string name="status_running_step">%1$s… · %2$s</string>
+    <string name="status_starting">Starting…</string>
+    <string name="status_waiting_network_hint">Sync starts as soon as the device is online.</string>
+    <string name="status_what_to_do">What to do</string>
+    <string name="status_todo_conflict">Resolve on the desktop: pull, fix the conflicting files, push; then sync again. Your phone changes are safe in a local commit.</string>
+    <string name="status_todo_auth">Open Settings and sign in again.</string>
+    <string name="status_todo_failed">Check the error below, then tap Sync now.</string>
+
+    <!-- Sync button -->
+    <string name="status_syncing_step">Syncing… (%1$s, %2$s)</string>
+
+    <!-- Error block -->
+    <string name="status_step_failed">%1$s failed</string>
+    <string name="status_error_details">Error details</string>
+    <string name="status_show_more">Show all</string>
+    <string name="status_show_less">Show less</string>
+
+    <!-- Trigger names -->
+    <string name="status_trigger_manual">You tapped Sync now</string>
+    <string name="status_trigger_open">%1$s opened</string>
+    <string name="status_trigger_close">%1$s closed</string>
+    <string name="status_trigger_intent">Automation (intent)</string>
+    <string name="status_trigger_clone">Clone</string>
+    <string name="status_trigger_app_fallback">Watched app</string>
+
+    <!-- History rows (accessibility) -->
+    <string name="status_expanded">expanded</string>
+    <string name="status_collapsed">collapsed</string>
+
+    <!-- Step list (accessibility) -->
+    <string name="step_state_pending">pending</string>
+    <string name="step_state_running">running</string>
+    <string name="step_state_done">done</string>
+    <string name="step_state_failed">failed</string>
+    <string name="step_state_skipped">skipped</string>
 </resources>
