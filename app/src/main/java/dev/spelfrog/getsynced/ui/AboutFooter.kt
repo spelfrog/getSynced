@@ -1,5 +1,11 @@
 package dev.spelfrog.getsynced.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +27,9 @@ import androidx.compose.ui.unit.dp
 import dev.spelfrog.getsynced.R
 import dev.spelfrog.getsynced.update.UpdateInfo
 
-/** Version line and update-check status at the very bottom of the Status page. */
+private const val PROJECT_URL = "https://github.com/spelfrog/getSynced"
+
+/** Version line (tap: project page on GitHub) and update-check status at the very bottom of the Status page. */
 @Composable
 fun AboutFooter(info: UpdateInfo, now: Long, onCheckNow: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
@@ -31,11 +39,19 @@ fun AboutFooter(info: UpdateInfo, now: Long, onCheckNow: () -> Unit, modifier: M
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         HorizontalDivider(color = colors.outlineVariant)
+        // Tapping the version opens the project page (release notes, source, issues).
+        val context = LocalContext.current
+        val openLabel = stringResource(R.string.about_open_github)
         Text(
             stringResource(R.string.about_version, info.installedVersion.ifBlank { "?" }),
-            style = MaterialTheme.typography.labelLarge,
-            color = colors.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.labelLarge.copy(textDecoration = TextDecoration.Underline),
+            color = colors.primary,
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .clickable(onClickLabel = openLabel, role = Role.Button) {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_URL))) }
+                }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         )
         val status = when {
             info.checking -> stringResource(R.string.about_checking)

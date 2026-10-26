@@ -109,4 +109,5 @@
     <string name="about_skipped">%1$s skipped</string>
     <string name="about_check_failed">check failed: %1$s</string>
     <string name="about_check_now">Check for updates now</string>
+    <string name="about_open_github">Open the getSynced page on GitHub</string>
 </resources>
