@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">getSynced</string>
+    <string name="channel_sync">Sync progress</string>
+    <string name="channel_sync_desc">Shows each step while the vault is syncing</string>
+    <string name="channel_result">Sync problems</string>
+    <string name="channel_result_desc">Alerts when a sync fails or hits a conflict</string>
+    <string name="accessibility_label">getSynced app watcher</string>
+    <string name="accessibility_description">Detects when your chosen app (for example Obsidian) is opened or closed so the vault can be synced at that moment. getSynced only receives window change events and never reads screen content.</string>
+</resources>
