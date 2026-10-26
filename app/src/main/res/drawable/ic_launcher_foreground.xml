@@ -1,52 +1,13 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- flower-spike glow -->
-    <path android:pathData="M54,30m-13,0a13,13 0 1,1 26,0a13,13 0 1,1 -26,0">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="54" android:centerY="30" android:gradientRadius="13">
-                <item android:offset="0" android:color="#8C8FE3F2"/>
-                <item android:offset="1" android:color="#008FE3F2"/>
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path android:pathData="M40,42m-9,0a9,9 0 1,1 18,0a9,9 0 1,1 -18,0">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="40" android:centerY="42" android:gradientRadius="9">
-                <item android:offset="0" android:color="#808FE3F2"/>
-                <item android:offset="1" android:color="#008FE3F2"/>
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path android:pathData="M69,44m-9,0a9,9 0 1,1 18,0a9,9 0 1,1 -18,0">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="69" android:centerY="44" android:gradientRadius="9">
-                <item android:offset="0" android:color="#808FE3F2"/>
-                <item android:offset="1" android:color="#008FE3F2"/>
-            </gradient>
-        </aapt:attr>
-    </path>
-    <!-- reeds, silver-blue, rising from one root point -->
-    <path android:strokeColor="#7AB8CA" android:strokeWidth="1.6" android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M54,82C52,66 47,56 40,46"/>
-    <path android:strokeColor="#A9DCE8" android:strokeWidth="1.9" android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M54,82C54,64 54,50 54,33"/>
-    <path android:strokeColor="#7AB8CA" android:strokeWidth="1.6" android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M54,82C56,66 62,58 69,48"/>
-    <path android:strokeColor="#6F9FB0" android:strokeWidth="1.2" android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M53,82C50,72 46,66 42,60 M55,82C58,72 62,66 66,60"/>
-    <!-- flower spikes -->
-    <path android:strokeColor="#E6F4F8" android:strokeWidth="1.1" android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M54,36l-2.5,-3.5 M54,36l2.5,-3.5 M54,32.5l-2,-3 M54,32.5l2,-3 M54,29l-1.5,-2.5 M54,29l1.5,-2.5
-                          M40,48l-2,-3 M40,48l2,-3 M40,45l-1.5,-2.5 M40,45l1.5,-2.5
-                          M69,50l-2,-3 M69,50l2,-3 M69,47l-1.5,-2.5 M69,47l1.5,-2.5"/>
-    <path android:fillColor="#E6F4F8" android:pathData="M54,25.5m-1.2,0a1.2,1.2 0 1,1 2.4,0a1.2,1.2 0 1,1 -2.4,0
-                                                        M40,41.5m-1,0a1,1 0 1,1 2,0a1,1 0 1,1 -2,0
-                                                        M69,43.5m-1,0a1,1 0 1,1 2,0a1,1 0 1,1 -2,0"/>
-    <!-- root net under the water line -->
-    <path android:strokeColor="#C7D3D9" android:strokeWidth="0.8" android:strokeAlpha="0.9" android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M54,82C50,85 46,86 42,88 M54,82C52,86 50,88 48,90 M54,82C55,86 55,88 54,90 M54,82C58,85 61,86 65,88 M54,82C57,84 61,85 66,86"/>
-    <path android:fillColor="#1C2113" android:strokeColor="#8BA065" android:strokeWidth="0.5"
-        android:pathData="M42,88m-1.3,0a1.3,1.3 0 1,1 2.6,0a1.3,1.3 0 1,1 -2.6,0 M65,88m-1.3,0a1.3,1.3 0 1,1 2.6,0a1.3,1.3 0 1,1 -2.6,0"/>
+    <!-- Same reed line drawing as the notification icon, scaled into the 66dp safe zone. -->
+    <group android:scaleX="2.5" android:scaleY="2.5" android:translateX="24" android:translateY="24">
+        <path android:strokeColor="#A9DCE8" android:strokeWidth="1.6" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M12,20C11.5,15 10,11.5 8,8.5 M12,20C12,15 12,10 12,5 M12,20C12.5,15 14,11.5 16,8.5"/>
+        <path android:strokeColor="#E6F4F8" android:strokeWidth="1.3" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M12,6.5l-1.6,-2 M12,6.5l1.6,-2 M8,10l-1.4,-1.8 M8,10l1.4,-1.8 M16,10l-1.4,-1.8 M16,10l1.4,-1.8"/>
+        <path android:strokeColor="#8BA065" android:strokeWidth="1.4" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M4,20H20"/>
+    </group>
 </vector>

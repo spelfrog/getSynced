@@ -10,9 +10,4 @@
             </gradient>
         </aapt:attr>
     </path>
-    <!-- murky water in the basin -->
-    <path android:fillColor="#5A6B3F" android:fillAlpha="0.45" android:pathData="M18,74h72v34H18z"/>
-    <path android:strokeColor="#8BA065" android:strokeWidth="1.2" android:strokeAlpha="0.85" android:pathData="M18,74L90,74"/>
-    <!-- glass basin walls -->
-    <path android:strokeColor="#565D6B" android:strokeWidth="2" android:pathData="M18,70V108 M90,70V108"/>
 </vector>
