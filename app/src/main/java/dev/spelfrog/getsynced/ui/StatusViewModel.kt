@@ -140,7 +140,7 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
         if (path.isBlank()) return emptyList()
         val dir = File(path)
         return runCatching {
-            if (!GitRepo.isRepo(dir)) emptyList() else GitRepo(dir).use { it.recentCommits(3) }
+            if (!GitRepo.isRepo(dir)) emptyList() else GitRepo(dir).use { it.recentCommits(10) }
         }.getOrDefault(emptyList())
     }
 }

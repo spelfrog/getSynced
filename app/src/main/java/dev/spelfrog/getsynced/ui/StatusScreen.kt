@@ -131,7 +131,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) { sideItems(state, now) }
+                    ) { sideItems(state, now, commitLimit = 10) }
                 }
             } else {
                 LazyColumn(
@@ -141,7 +141,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     primaryItems(state, latest, now, onOpenSetup, onSync)
-                    sideItems(state, now)
+                    sideItems(state, now, commitLimit = 3)
                 }
             }
         }
@@ -183,9 +183,9 @@ private fun LazyListScope.primaryItems(
 }
 
 /** Recent commits and older runs: below the steps on a phone, the right column on a tablet. */
-private fun LazyListScope.sideItems(state: StatusUiState, now: Long) {
+private fun LazyListScope.sideItems(state: StatusUiState, now: Long, commitLimit: Int) {
     if (state.commits.isNotEmpty()) {
-        item(key = "commits") { CommitsCard(state.commits, now) }
+        item(key = "commits") { CommitsCard(state.commits.take(commitLimit), now) }
     }
     val older = state.olderRuns
     if (older.isNotEmpty()) {
