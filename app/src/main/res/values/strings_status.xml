@@ -79,4 +79,13 @@
     <string name="update_available">Update available: %1$s</string>
     <string name="update_download">Download</string>
     <string name="update_skip">Skip this version</string>
+    <string name="about_version">getSynced %1$s</string>
+    <string name="about_never_checked">Updates not checked yet</string>
+    <string name="about_checking">Checking for updates…</string>
+    <string name="about_last_check">Update check %1$s</string>
+    <string name="about_up_to_date">up to date (latest %1$s)</string>
+    <string name="about_update_available">%1$s available</string>
+    <string name="about_skipped">%1$s skipped</string>
+    <string name="about_check_failed">check failed: %1$s</string>
+    <string name="about_check_now">Check for updates now</string>
 </resources>

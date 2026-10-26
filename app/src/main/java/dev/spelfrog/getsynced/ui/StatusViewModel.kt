@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.io.File
 import dev.spelfrog.getsynced.update.ReleaseInfo
+import dev.spelfrog.getsynced.update.UpdateInfo
 import dev.spelfrog.getsynced.update.UpdateState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
@@ -41,9 +42,11 @@ data class StatusUiState(
     val commits: List<CommitInfo> = emptyList(),
     /** Trigger id ("manual", "open", ...) to a sentence for people ("Obsidian opened"). */
     val triggerLabels: Map<String, String> = emptyMap(),
-    /** Newer release on GitHub, if the foreground check found one. */
-    val update: ReleaseInfo? = null,
+    /** Update-check status for the footer; [UpdateInfo.available] is the release to offer, if any. */
+    val updateInfo: UpdateInfo = UpdateInfo(),
 ) {
+    val update: ReleaseInfo? get() = updateInfo.available
+
     /** Human words for a [SyncRun.trigger] id; unknown ids are shown as they are. */
     fun triggerLabel(trigger: String): String = triggerLabels[trigger] ?: trigger
 
@@ -108,7 +111,7 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
         SyncTrigger.isWaiting(application),
         commits,
         triggerLabels,
-        UpdateState.available,
+        UpdateState.info,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         StatusUiState(
@@ -119,7 +122,7 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
             enqueued = values[4] as Boolean,
             commits = values[5] as List<CommitInfo>,
             triggerLabels = values[6] as Map<String, String>,
-            update = values[7] as ReleaseInfo?,
+            updateInfo = values[7] as UpdateInfo,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatusUiState())
 
@@ -129,6 +132,14 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun skipUpdate(release: ReleaseInfo) = UpdateState.skip(getApplication(), release)
+
+    /** "Check now" in the footer: ignores the throttle and the skipped version. */
+    fun checkForUpdateNow() {
+        viewModelScope.launch {
+            UpdateState.unskip(getApplication())
+            UpdateState.checkIfDue(getApplication(), force = true)
+        }
+    }
 
     private fun appLabel(pkg: String): String? {
         if (pkg.isBlank()) return null
