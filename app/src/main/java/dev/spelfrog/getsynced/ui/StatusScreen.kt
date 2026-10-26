@@ -155,12 +155,15 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) { primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve, onShowDiff) }
+                    ) {
+                        primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve, onShowDiff)
+                        item(key = "about") { AboutFooter(state.updateInfo, now, viewModel::checkForUpdateNow) }
+                    }
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) { sideItems(state, now, commitLimit = 9, onCheckNow = viewModel::checkForUpdateNow) }
+                    ) { sideItems(state, now, commitLimit = 9, onCheckNow = null) }
                 }
             } else {
                 LazyColumn(
@@ -229,7 +232,8 @@ private fun LazyListScope.primaryItems(
 }
 
 /** Recent commits and older runs: below the steps on a phone, the right column on a tablet. */
-private fun LazyListScope.sideItems(state: StatusUiState, now: Long, commitLimit: Int, onCheckNow: () -> Unit) {
+/** [onCheckNow] null = the About footer is rendered elsewhere (two-pane: under the left column). */
+private fun LazyListScope.sideItems(state: StatusUiState, now: Long, commitLimit: Int, onCheckNow: (() -> Unit)?) {
     if (state.commits.isNotEmpty()) {
         item(key = "commits") { CommitsCard(state.commits.take(commitLimit), now) }
     }
@@ -237,7 +241,7 @@ private fun LazyListScope.sideItems(state: StatusUiState, now: Long, commitLimit
     if (older.isNotEmpty()) {
         item(key = "history") { HistoryCard(older, state, now) }
     }
-    item(key = "about") { AboutFooter(state.updateInfo, now, onCheckNow) }
+    if (onCheckNow != null) item(key = "about") { AboutFooter(state.updateInfo, now, onCheckNow) }
 }
 
 /** Current time in millis, refreshed every [intervalMs]. */
