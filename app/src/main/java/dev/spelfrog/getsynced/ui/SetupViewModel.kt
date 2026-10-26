@@ -128,6 +128,15 @@ fun treeUriToPath(uri: Uri): String? {
     return if (rel.isEmpty()) base else "$base/$rel"
 }
 
+/**
+ * Folder names may legitimately end with a space, so only line breaks and a trailing "/" are removed.
+ * Leading whitespace is dropped because a path must start with "/".
+ */
+fun cleanPath(path: String): String {
+    val p = path.replace("\n", "").replace("\r", "").trimStart()
+    return if (p.length > 1) p.trimEnd('/') else p
+}
+
 /** Full exception text including the cause chain, for selectable error blocks. */
 fun errorText(e: Throwable): String = buildString {
     val seen = HashSet<Throwable>()
@@ -277,7 +286,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 remoteUrl = f.remoteUrl.trim(),
                 username = f.username.trim(),
-                vaultPath = f.vaultPath.trim().trimEnd('/').ifEmpty { f.vaultPath.trim() },
+                vaultPath = cleanPath(f.vaultPath),
                 authorName = f.authorName.trim(),
                 authorEmail = f.authorEmail.trim(),
                 branch = f.branch.trim(),
@@ -302,7 +311,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         folderJob = viewModelScope.launch {
             if (delayMs > 0) delay(delayMs)
             _folderState.value = FolderState.CHECKING
-            val path = _form.value.vaultPath.trim()
+            val path = cleanPath(_form.value.vaultPath)
             val state = withContext(Dispatchers.IO) { inspectFolder(path) }
             _existingRemote.value = if (state == FolderState.REPO) {
                 withContext(Dispatchers.IO) { runCatching { GitRepo(File(path)).use { it.remoteUrl() } }.getOrNull() }
@@ -449,7 +458,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun runClone(f: SetupForm) {
         persist(f)
         val url = f.remoteUrl.trim()
-        val dir = File(f.vaultPath.trim())
+        val dir = File(cleanPath(f.vaultPath))
         val tracker = StepTracker(TRIGGER_CLONE, listOf(STEP_PREPARE, STEP_CLONE, STEP_CONFIGURE))
         var step = 0
         var wasEmpty = false
@@ -503,7 +512,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 persist(f)
                 val url = f.remoteUrl.trim()
-                val branch = GitRepo(File(f.vaultPath.trim())).use { git ->
+                val branch = GitRepo(File(cleanPath(f.vaultPath))).use { git ->
                     git.ensureAndroidConfig(url)
                     git.currentBranch()
                 }
