@@ -45,7 +45,7 @@
     <string name="status_starting">Starting…</string>
     <string name="status_waiting_network_hint">Sync starts as soon as the device is online.</string>
     <string name="status_what_to_do">What to do</string>
-    <string name="status_todo_conflict">Resolve on the desktop: pull, fix the conflicting files, push; then sync again. Your phone changes are safe in a local commit.</string>
+    <string name="status_todo_conflict">Choose a version for each file below, or resolve on the desktop.</string>
     <string name="status_todo_auth">Open Settings and sign in again.</string>
     <string name="status_todo_failed">Check the error below, then tap Sync now.</string>
 
@@ -65,6 +65,27 @@
     <string name="status_trigger_intent">Automation (intent)</string>
     <string name="status_trigger_clone">Clone</string>
     <string name="status_trigger_app_fallback">Watched app</string>
+    <string name="status_trigger_resolve">Resolved on this device</string>
+
+    <!-- Conflict card -->
+    <string name="conflict_title">Resolve conflict</string>
+    <string name="conflict_history_note">The other version stays in the git history.</string>
+    <string name="conflict_keep_all_phone">Keep all phone</string>
+    <string name="conflict_keep_all_remote">Keep all remote</string>
+    <string name="conflict_kind_both_modified">edited on both sides</string>
+    <string name="conflict_kind_both_added">added on both sides</string>
+    <string name="conflict_kind_deleted_on_phone">deleted on phone, edited elsewhere</string>
+    <string name="conflict_kind_deleted_on_remote">edited on phone, deleted elsewhere</string>
+    <string name="conflict_binary">binary</string>
+    <string name="conflict_size_phone">phone %1$s</string>
+    <string name="conflict_size_remote">remote %1$s</string>
+    <string name="conflict_side_phone">Phone</string>
+    <string name="conflict_side_remote">Remote</string>
+    <string name="conflict_side_both">Both</string>
+    <string name="conflict_side_phone_cd">%1$s: keep phone version</string>
+    <string name="conflict_side_remote_cd">%1$s: keep remote version</string>
+    <string name="conflict_side_both_cd">%1$s: keep both versions</string>
+    <string name="conflict_resolve">Resolve and sync</string>
 
     <!-- History rows (accessibility) -->
     <string name="status_expanded">expanded</string>

@@ -33,6 +33,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     private var lastSeen: SyncRun? = null
     private var lastNotifyKey: String? = null
     private var lastNotifyAt = 0L
+    /** The conflict choices this run was started with (see [ConflictChoices]); null if none. */
+    private var usedResolution: Resolution? = null
 
     override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo(null)
 
@@ -50,6 +52,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val trigger = inputData.getString(KEY_TRIGGER) ?: "unknown"
         val startedAt = System.currentTimeMillis()
         SyncNotification.cancelResult(ctx)
+        SyncToasts.showStart(ctx, trigger, SettingsRepository.get(ctx).current())
 
         try {
             setForeground(foregroundInfo(null))
@@ -88,6 +91,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val settings = SettingsRepository.get(applicationContext).current()
         if (!settings.isConfigured) return null
         val token = Secrets(applicationContext).getToken()
+        usedResolution = ConflictChoices.load(applicationContext)
         return SyncConfig(
             repoDir = File(settings.vaultPath),
             remoteUrl = settings.remoteUrl,
@@ -97,6 +101,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             authorEmail = settings.authorEmail,
             branch = settings.branch.ifBlank { null },
             deviceName = deviceName(),
+            resolution = usedResolution,
         )
     }
 
@@ -135,10 +140,30 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         } else run
         SyncState.update(final)
         withContext(NonCancellable) { SyncHistory.get(ctx).append(final) }
+        clearChoicesIfDone(final)
         SyncNotification.cancel(ctx)
         if (final.outcome != SyncOutcome.OK) SyncNotification.showResult(ctx, final)
+        SyncToasts.showResult(ctx, final, SettingsRepository.get(ctx).current())
         // No retry on failure: the next open/close/manual trigger runs it again.
         return if (final.outcome == SyncOutcome.FAILED) Result.failure() else Result.success()
+    }
+
+    /**
+     * Clears the conflict choices once they have been used or can no longer apply: the run ended OK or
+     * CONFLICT (a fresh payload replaces them), or it reached Resolve or Merge (Merge with choices set means
+     * they were stale). They are kept when the run failed earlier (network, auth) so the next trigger retries.
+     * Choices saved by the UI while this run was going (they differ from [usedResolution]) are never cleared.
+     */
+    private fun clearChoicesIfDone(run: SyncRun) {
+        val used = usedResolution ?: return
+        val reachedMerge = run.steps.any { it.name == "Resolve" || it.name.startsWith("Merge") }
+        val done = run.outcome == SyncOutcome.OK || run.outcome == SyncOutcome.CONFLICT || reachedMerge
+        if (!done) return
+        try {
+            if (ConflictChoices.load(applicationContext) == used) ConflictChoices.clear(applicationContext)
+        } catch (e: Exception) {
+            Log.w(TAG, "could not clear conflict choices", e)
+        }
     }
 
     private fun failedRun(startedAt: Long, trigger: String, message: String): SyncRun {

@@ -36,6 +36,8 @@ data class AppSettings(
     val triggerPackage: String = "",
     val syncOnOpen: Boolean = true,
     val syncOnClose: Boolean = true,
+    /** Show a toast when an automatic sync (open/close/intent) starts and ends. */
+    val toastOnAutoSync: Boolean = true,
     /** True once a repo exists at vaultPath and the remote is configured. */
     val setupDone: Boolean = false,
     /** [AUTH_TOKEN] (personal access token + username) or [AUTH_GITHUB] (GitHub App / OAuth App device flow). */
@@ -69,6 +71,7 @@ private object Keys {
     val triggerPackage = stringPreferencesKey("trigger_package")
     val syncOnOpen = booleanPreferencesKey("sync_on_open")
     val syncOnClose = booleanPreferencesKey("sync_on_close")
+    val toastOnAutoSync = booleanPreferencesKey("toast_on_auto_sync")
     val setupDone = booleanPreferencesKey("setup_done")
     val authMode = stringPreferencesKey("auth_mode")
     val githubClientId = stringPreferencesKey("github_client_id")
@@ -88,6 +91,7 @@ private fun Preferences.toAppSettings(): AppSettings {
         triggerPackage = this[Keys.triggerPackage] ?: d.triggerPackage,
         syncOnOpen = this[Keys.syncOnOpen] ?: d.syncOnOpen,
         syncOnClose = this[Keys.syncOnClose] ?: d.syncOnClose,
+        toastOnAutoSync = this[Keys.toastOnAutoSync] ?: d.toastOnAutoSync,
         setupDone = this[Keys.setupDone] ?: d.setupDone,
         authMode = this[Keys.authMode] ?: d.authMode,
         githubClientId = this[Keys.githubClientId] ?: d.githubClientId,
@@ -106,6 +110,7 @@ private fun MutablePreferences.write(s: AppSettings) {
     this[Keys.triggerPackage] = s.triggerPackage
     this[Keys.syncOnOpen] = s.syncOnOpen
     this[Keys.syncOnClose] = s.syncOnClose
+    this[Keys.toastOnAutoSync] = s.toastOnAutoSync
     this[Keys.setupDone] = s.setupDone
     this[Keys.authMode] = s.authMode
     this[Keys.githubClientId] = s.githubClientId

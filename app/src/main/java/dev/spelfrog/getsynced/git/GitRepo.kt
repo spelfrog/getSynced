@@ -1,6 +1,8 @@
 package dev.spelfrog.getsynced.git
 
 import dev.spelfrog.getsynced.sync.ChangeSet
+import dev.spelfrog.getsynced.sync.Side
+import dev.spelfrog.getsynced.sync.ConflictFile
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.MergeCommand
 import org.eclipse.jgit.api.MergeResult.MergeStatus
@@ -11,6 +13,7 @@ import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.PersonIdent
 import org.eclipse.jgit.lib.ProgressMonitor
 import org.eclipse.jgit.lib.RepositoryCache
+import org.eclipse.jgit.lib.RepositoryState
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.transport.RefSpec
 import org.eclipse.jgit.transport.RemoteRefUpdate
@@ -34,7 +37,10 @@ sealed class MergeOutcome {
     object AlreadyUpToDate : MergeOutcome()
     data class FastForward(val commits: Int) : MergeOutcome()
     data class Merged(val commits: Int) : MergeOutcome()
-    data class Conflict(val files: List<String>) : MergeOutcome()
+    /** Conflicting paths with their kind, plus the two commits the conflict was computed from. */
+    data class Conflict(val files: List<ConflictFile>, val headSha: String, val remoteSha: String) : MergeOutcome() {
+        val paths: List<String> get() = files.map { it.path }
+    }
 }
 
 data class CommitInfo(val sha: String, val message: String, val author: String, val timeMs: Long)
@@ -253,13 +259,22 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
     }
 
     /**
-     * Merge origin/<branch> into current branch. On Conflict the caller must call resetHardToHead().
+     * Merge origin/<branch> into current branch.
+     *
+     * Conflicts are detected first with an in-memory merge (object reads only). When it reports unmerged paths,
+     * [MergeOutcome.Conflict] is returned and the working tree and index are left untouched, so the caller does
+     * not need to reset. The real merge only runs when the in-memory merge is clean.
      * If [authorName]/[authorEmail] are given they are used for a merge commit; otherwise JGit's default identity.
      */
     fun merge(authorName: String? = null, authorEmail: String? = null): MergeOutcome {
         val remote = repo.exactRef(trackingRef()) ?: return MergeOutcome.AlreadyUpToDate
-        val behind = countOnlyIn(remote.objectId, repo.resolve(Constants.HEAD))
+        val head = repo.resolve(Constants.HEAD)
+        val behind = countOnlyIn(remote.objectId, head)
         if (behind == 0) return MergeOutcome.AlreadyUpToDate
+        // A fast-forward cannot conflict; otherwise check in memory before touching the vault.
+        if (head != null && countOnlyIn(head, remote.objectId) > 0) {
+            precheckConflict(head, remote.objectId)?.let { return it }
+        }
         val withIdent = authorName != null && authorEmail != null
         val result = git.merge()
             .include(remote)
@@ -280,8 +295,15 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
                     .call()
                 MergeOutcome.Merged(behind)
             }
-            MergeStatus.CONFLICTING -> MergeOutcome.Conflict(result.conflicts?.keys?.sorted() ?: emptyList())
+            MergeStatus.CONFLICTING -> {
+                // Should not happen after a clean in-memory merge; never leave markers behind.
+                val paths = (result.conflicts?.keys ?: emptySet()).sorted()
+                resetHardToHead()
+                conflictOf(paths, head!!, remote.objectId)
+            }
             else -> {
+                // FAILED (e.g. DIRTY_WORKTREE): JGit already undid its changes and cleared MERGE_HEAD.
+                // No reset here: it would throw away uncommitted edits.
                 val paths = result.failingPaths?.entries?.joinToString { "${it.key} (${it.value})" }
                     ?: result.checkoutConflicts?.joinToString()
                 throw IllegalStateException(
@@ -289,6 +311,145 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
                 )
             }
         }
+    }
+
+    /** In-memory merge of HEAD and [remote]; Conflict if it has unmerged paths, null when clean. */
+    private fun precheckConflict(head: ObjectId, remote: ObjectId): MergeOutcome.Conflict? {
+        val unmerged = ConflictInspector.unmergedPaths(repo, head, remote)
+        return if (unmerged.isEmpty()) null else conflictOf(unmerged, head, remote)
+    }
+
+    private fun conflictOf(paths: List<String>, head: ObjectId, remote: ObjectId) = MergeOutcome.Conflict(
+        files = ConflictInspector.classify(repo, paths, head, remote),
+        headSha = head.name,
+        remoteSha = remote.name,
+    )
+
+    /**
+     * Merge origin/<branch> applying per-path choices for the conflicting files.
+     *
+     * - No conflict (in memory): same as [merge].
+     * - [choices] does not cover every conflicting path: returns Conflict, nothing is touched.
+     * - Otherwise merges, resolves every conflicting path (PHONE = HEAD's version, REMOTE = the remote's,
+     *   BOTH = remote at the path plus HEAD's version as "<stem> (phone).<ext>"; a deletion wins by removing
+     *   the file) and commits a merge commit with both parents. BOTH on a delete/modify path keeps the side
+     *   that still has the file. Returns Merged(commits pulled).
+     * On any error the repository is reset hard to HEAD and the error rethrown.
+     */
+    fun mergeResolving(choices: Map<String, Side>, authorName: String, authorEmail: String, message: String): MergeOutcome {
+        val remoteRef = repo.exactRef(trackingRef()) ?: return MergeOutcome.AlreadyUpToDate
+        val remote = remoteRef.objectId
+        val head = repo.resolve(Constants.HEAD) ?: return merge(authorName, authorEmail)
+        val behind = countOnlyIn(remote, head)
+        if (behind == 0 || countOnlyIn(head, remote) == 0) return merge(authorName, authorEmail)
+        val conflict = precheckConflict(head, remote) ?: return merge(authorName, authorEmail)
+        if (!choices.keys.containsAll(conflict.paths)) return conflict
+
+        try {
+            val result = git.merge()
+                .include(remoteRef)
+                .setFastForward(MergeCommand.FastForwardMode.FF)
+                .setCommit(false)
+                .setMessage(message)
+                .call()
+            when (result.mergeStatus) {
+                MergeStatus.CONFLICTING, MergeStatus.MERGED_NOT_COMMITTED -> Unit
+                MergeStatus.FAILED -> {
+                    // JGit undid its changes; do not reset (would lose uncommitted edits).
+                    val paths = result.failingPaths?.entries?.joinToString { "${it.key} (${it.value})" }
+                    throw MergeFailedException("merge FAILED" + if (paths.isNullOrBlank()) "" else ": $paths")
+                }
+                else -> throw IllegalStateException("unexpected merge status ${result.mergeStatus}")
+            }
+            RevWalk(repo).use { walk ->
+                val headCommit = walk.parseCommit(head)
+                val remoteCommit = walk.parseCommit(remote)
+                val reader = walk.objectReader
+                val fromHead = mutableListOf<String>()
+                val fromRemote = mutableListOf<String>()
+                val toRemove = mutableListOf<String>()
+                val copies = mutableListOf<Pair<String, ObjectId>>() // path of HEAD's version to keep beside
+                for (file in conflict.files) {
+                    val inHead = ConflictInspector.blobAt(reader, file.path, headCommit.tree)
+                    val inRemote = ConflictInspector.blobAt(reader, file.path, remoteCommit.tree)
+                    val side = when (val c = choices.getValue(file.path)) {
+                        Side.BOTH -> when {
+                            inHead != null && inRemote != null -> Side.BOTH
+                            inRemote != null -> Side.REMOTE
+                            else -> Side.PHONE
+                        }
+                        else -> c
+                    }
+                    when (side) {
+                        Side.PHONE -> if (inHead != null) fromHead += file.path else toRemove += file.path
+                        Side.REMOTE -> if (inRemote != null) fromRemote += file.path else toRemove += file.path
+                        Side.BOTH -> {
+                            fromRemote += file.path
+                            copies += file.path to inHead!!
+                        }
+                    }
+                }
+                if (fromHead.isNotEmpty()) git.checkout().setStartPoint(headCommit).addPaths(fromHead).call()
+                if (fromRemote.isNotEmpty()) git.checkout().setStartPoint(remoteCommit).addPaths(fromRemote).call()
+                if (toRemove.isNotEmpty()) {
+                    val rm = git.rm()
+                    toRemove.forEach { rm.addFilepattern(it) }
+                    rm.call()
+                }
+                if (copies.isNotEmpty()) {
+                    val index = repo.readDirCache()
+                    val written = mutableSetOf<String>()
+                    val add = git.add()
+                    for ((path, blob) in copies) {
+                        val copy = ConflictInspector.phoneCopyName(path) { candidate ->
+                            candidate in written || File(repo.workTree, candidate).exists() || index.findEntry(candidate) >= 0
+                        }
+                        val target = File(repo.workTree, copy)
+                        target.parentFile?.mkdirs()
+                        target.outputStream().use { out -> reader.open(blob).copyTo(out) }
+                        written += copy
+                        add.addFilepattern(copy)
+                    }
+                    add.call()
+                }
+            }
+            if (repo.readDirCache().hasUnmergedPaths()) {
+                throw IllegalStateException("conflicts left after resolving: " + unmergedIndexPaths().joinToString())
+            }
+            val ident = PersonIdent(authorName, authorEmail)
+            git.commit()
+                .setMessage(message)
+                .setAuthor(ident)
+                .setCommitter(ident)
+                .setAllowEmpty(true)
+                .call()
+            return MergeOutcome.Merged(behind)
+        } catch (e: MergeFailedException) {
+            throw IllegalStateException(e.message, e)
+        } catch (t: Throwable) {
+            try { resetHardToHead() } catch (r: Throwable) { t.addSuppressed(r) }
+            throw t
+        }
+    }
+
+    private class MergeFailedException(message: String) : Exception(message)
+
+    private fun unmergedIndexPaths(): List<String> {
+        val dc = repo.readDirCache()
+        return (0 until dc.entryCount).map { dc.getEntry(it) }.filter { it.stage > 0 }.map { it.pathString }.distinct()
+    }
+
+    /** True when the repository is mid-merge (process died earlier). Cleans it up with a hard reset and returns true. */
+    fun abortLeftoverMerge(): Boolean {
+        if (repo.repositoryState == RepositoryState.SAFE) return false
+        if (repo.resolve(Constants.HEAD) == null) {
+            // Unborn branch: nothing to reset to; just drop the merge bookkeeping.
+            repo.writeMergeHeads(null)
+            repo.writeMergeCommitMsg(null)
+        } else {
+            resetHardToHead()
+        }
+        return true
     }
 
     fun resetHardToHead() {

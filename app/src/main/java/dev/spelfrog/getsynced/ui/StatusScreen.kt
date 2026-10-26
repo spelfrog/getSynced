@@ -83,6 +83,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.spelfrog.getsynced.R
 import dev.spelfrog.getsynced.git.CommitInfo
+import dev.spelfrog.getsynced.sync.ConflictInfo
+import dev.spelfrog.getsynced.sync.Side
 import dev.spelfrog.getsynced.sync.StepState
 import dev.spelfrog.getsynced.sync.SyncOutcome
 import dev.spelfrog.getsynced.sync.SyncRun
@@ -140,7 +142,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) { primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate) }
+                    ) { primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve) }
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
@@ -154,7 +156,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate)
+                    primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve)
                     sideItems(state, now, commitLimit = 3, onCheckNow = viewModel::checkForUpdateNow)
                 }
             }
@@ -173,6 +175,7 @@ private fun LazyListScope.primaryItems(
     onOpenSetup: () -> Unit,
     onSync: () -> Unit,
     onSkipUpdate: (ReleaseInfo) -> Unit,
+    onResolve: (ConflictInfo, Map<String, Side>) -> Unit,
 ) {
     state.update?.let { release ->
         item(key = "update") { UpdateCard(release, onSkip = { onSkipUpdate(release) }) }
@@ -181,7 +184,13 @@ private fun LazyListScope.primaryItems(
         item(key = "setup") { NotSetUpCard(onOpenSetup) }
     }
     item(key = "header") { HeaderCard(state, latest, now) }
-    if (latest != null && (latest.outcome == SyncOutcome.FAILED || latest.outcome == SyncOutcome.CONFLICT)) {
+    val conflict = latest?.takeIf { it.outcome == SyncOutcome.CONFLICT }?.conflict
+    if (conflict != null) {
+        // Stays visible (disabled) while a resolve run is queued or starting.
+        item(key = "conflict") {
+            ConflictCard(conflict, busy = state.busy, onResolve = { choices -> onResolve(conflict, choices) })
+        }
+    } else if (latest != null && (latest.outcome == SyncOutcome.FAILED || latest.outcome == SyncOutcome.CONFLICT)) {
         val failedStep = latest.steps.lastOrNull { it.state == StepState.FAILED }
         val detail = failedStep?.detail?.takeIf { it.isNotBlank() } ?: latest.summary
         if (detail.isNotBlank()) {
@@ -226,7 +235,7 @@ private fun rememberNow(intervalMs: Long): Long {
 
 /** Card with the thin leader-line border of the field sketch. */
 @Composable
-private fun SketchCard(
+internal fun SketchCard(
     modifier: Modifier = Modifier,
     containerColor: Color = Color.Unspecified,
     borderColor: Color = MaterialTheme.sketch.cardBorder,

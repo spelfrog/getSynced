@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Toasts for automatic syncs (watched app opened or closed, or intent) -->
+    <string name="toast_sync_start">getSynced: syncing…</string>
+    <string name="toast_sync_nothing">Synced · nothing to sync</string>
+    <string name="toast_sync_counts">Synced · pushed %1$d, pulled %2$d</string>
+    <string name="toast_sync_failed">Sync failed: %1$s</string>
+    <plurals name="toast_sync_conflict">
+        <item quantity="one">Conflict in %d file · open getSynced</item>
+        <item quantity="other">Conflict in %d files · open getSynced</item>
+    </plurals>
+    <string name="toast_sync_conflict_unknown">Merge conflict · open getSynced</string>
+</resources>

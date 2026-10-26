@@ -8,6 +8,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.eclipse.jgit.lib.Constants
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder
+import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -15,6 +18,11 @@ import java.util.Locale
 
 /**
  * The sync algorithm (see plan): check, commit, fetch, merge, push (with one retry).
+ *
+ * Conflicts: the git layer detects them in memory, so a CONFLICT run leaves the working tree untouched and
+ * carries a [ConflictInfo] payload. When [SyncConfig.resolution] is set and its remoteSha still equals
+ * origin/<branch> after the fetch, step "Resolve" replaces "Merge" and applies the user's per-file choices.
+ * If the remote moved since the choices were made, they are ignored and the normal Merge step runs.
  * Pure Kotlin + JGit, no Android dependencies, so it is unit-tested on the JVM.
  *
  * [beforePush] / [beforeFetch] are test hooks invoked right before every push / fetch attempt (inside the
@@ -35,8 +43,12 @@ class SyncEngine(
     private class Skip(val detail: String)
 
     /** Ends the run. [stepDetail] is what the failing step shows (defaults to the summary). */
-    private class Abort(val outcome: SyncOutcome, val summary: String, val stepDetail: String = summary) :
-        Exception(summary)
+    private class Abort(
+        val outcome: SyncOutcome,
+        val summary: String,
+        val stepDetail: String = summary,
+        val conflict: ConflictInfo? = null,
+    ) : Exception(summary)
 
     private class Recorder(trigger: String, private val onUpdate: (SyncRun) -> Unit) {
         @Volatile var run = SyncRun(startedAt = System.currentTimeMillis(), trigger = trigger)
@@ -51,8 +63,13 @@ class SyncEngine(
         }
 
         @Synchronized
-        fun finish(outcome: SyncOutcome, summary: String) {
-            run = run.copy(outcome = outcome, summary = summary, finishedAt = System.currentTimeMillis())
+        fun finish(outcome: SyncOutcome, summary: String, conflict: ConflictInfo? = null) {
+            run = run.copy(
+                outcome = outcome,
+                summary = summary,
+                finishedAt = System.currentTimeMillis(),
+                conflict = conflict,
+            )
             emit()
         }
 
@@ -109,6 +126,34 @@ class SyncEngine(
             }
         }
 
+        /** Applies [resolution] via mergeResolving; returns the step detail or a Skip. */
+        suspend fun resolveStep(r: GitRepo, resolution: Resolution): Any {
+            val branch = syncBranch(r)
+            val message = resolveMessage(branch, config.deviceName, resolution.choices)
+            val m = withContext(Dispatchers.IO) {
+                r.mergeResolving(resolution.choices, config.authorName, config.authorEmail, message)
+            }
+            return when (m) {
+                MergeOutcome.AlreadyUpToDate -> Skip("nothing to merge")
+                is MergeOutcome.FastForward -> {
+                    pulled += m.commits
+                    "fast-forward, ${m.commits} ${plural(m.commits, "commit")} (no conflict left)"
+                }
+                is MergeOutcome.Merged -> {
+                    pulled += m.commits
+                    describeChoices(resolution.choices) + " (merged ${m.commits} ${plural(m.commits, "commit")})"
+                }
+                is MergeOutcome.Conflict -> {
+                    val why = if (m.remoteSha.isNotEmpty() && m.remoteSha != resolution.remoteSha) {
+                        "remote moved, choices discarded"
+                    } else {
+                        "choices do not cover every conflicting file"
+                    }
+                    throw conflictAbort(m, "", prefix = "$why; ")
+                }
+            }
+        }
+
         suspend fun fetchMergePush(suffix: String): PushOutcome {
             val r = repo!!
             step("Fetch$suffix") { progress ->
@@ -118,27 +163,27 @@ class SyncEngine(
                 }
                 (if (behind == 0) "up to date" else "$behind new ${plural(behind, "commit")}") + retryNote(retried)
             }
-            step("Merge$suffix") {
-                when (val m = withContext(Dispatchers.IO) { r.merge(config.authorName, config.authorEmail) }) {
-                    MergeOutcome.AlreadyUpToDate -> Skip("nothing to merge")
-                    is MergeOutcome.FastForward -> {
-                        pulled += m.commits
-                        "fast-forward, ${m.commits} ${plural(m.commits, "commit")}"
-                    }
-                    is MergeOutcome.Merged -> {
-                        pulled += m.commits
-                        "merged ${m.commits} ${plural(m.commits, "commit")}"
-                    }
-                    is MergeOutcome.Conflict -> {
-                        withContext(Dispatchers.IO) { r.resetHardToHead() }
-                        val n = m.files.size
-                        val text = "conflict in $n ${plural(n, "file")}: ${m.files.joinToString(", ")}" +
-                            " (merge aborted, local commit kept)"
-                        throw Abort(
-                            SyncOutcome.CONFLICT,
-                            "Merge conflict in $n ${plural(n, "file")}: ${m.files.joinToString(", ")}",
-                            text,
-                        )
+            val resolution = config.resolution
+            // Choices apply only in the first round and only against the remote commit they were made for.
+            val stale = resolution != null && suffix.isEmpty() &&
+                !sameCommit(withContext(Dispatchers.IO) { remoteTip(config.repoDir, syncBranch(r)) }, resolution.remoteSha)
+            if (resolution != null && suffix.isEmpty() && !stale) {
+                step("Resolve") { resolveStep(r, resolution) }
+            } else {
+                val note = if (stale) " · earlier choices discarded (remote moved)" else ""
+                step("Merge$suffix") {
+                    when (val m = withContext(Dispatchers.IO) { r.merge(config.authorName, config.authorEmail) }) {
+                        MergeOutcome.AlreadyUpToDate -> Skip("nothing to merge$note")
+                        is MergeOutcome.FastForward -> {
+                            pulled += m.commits
+                            "fast-forward, ${m.commits} ${plural(m.commits, "commit")}$note"
+                        }
+                        is MergeOutcome.Merged -> {
+                            pulled += m.commits
+                            "merged ${m.commits} ${plural(m.commits, "commit")}$note"
+                        }
+                        // The git layer detects conflicts in memory: worktree and index are untouched.
+                        is MergeOutcome.Conflict -> throw conflictAbort(m, note)
                     }
                 }
             }
@@ -181,7 +226,8 @@ class SyncEngine(
                 val url = r.remoteUrl()
                 if (url.isNullOrBlank()) throw StepFailure("no remote 'origin' configured")
                 val branch = withContext(Dispatchers.IO) { r.currentBranch() }
-                "$branch → $url"
+                val cleaned = withContext(Dispatchers.IO) { r.abortLeftoverMerge() }
+                "$branch → $url" + if (cleaned) " · cleaned up an interrupted merge" else ""
             }
 
             step("Commit") {
@@ -209,7 +255,7 @@ class SyncEngine(
             val secs = (System.currentTimeMillis() - rec.run.startedAt) / 1000.0
             rec.finish(SyncOutcome.OK, "pushed $pushed, pulled $pulled, ${String.format(Locale.US, "%.1f", secs)} s")
         } catch (a: Abort) {
-            rec.finish(a.outcome, a.summary)
+            rec.finish(a.outcome, a.summary, a.conflict)
         } catch (e: CancellationException) {
             rec.finish(SyncOutcome.FAILED, "Cancelled")
             throw e
@@ -244,6 +290,24 @@ class SyncEngine(
 
     private fun retryNote(retried: Boolean): String = if (retried) " (after 1 retry)" else ""
 
+    /** The branch GitRepo syncs: the configured one, else the checked out one. */
+    private fun syncBranch(r: GitRepo): String = r.branch?.takeIf { it.isNotBlank() } ?: r.currentBranch()
+
+    /**
+     * Ends the run as CONFLICT with the payload for the Resolve card. [note] is appended to the step detail,
+     * [prefix] goes before it ("remote moved, choices discarded; ").
+     */
+    private fun conflictAbort(m: MergeOutcome.Conflict, note: String, prefix: String = ""): Abort {
+        val n = m.files.size
+        val list = m.paths.joinToString(", ")
+        return Abort(
+            SyncOutcome.CONFLICT,
+            "Merge conflict in $n ${plural(n, "file")}: $list",
+            "${prefix}conflict in $n ${plural(n, "file")}: $list (nothing merged, phone commit kept)$note",
+            ConflictInfo(m.files, m.headSha, m.remoteSha),
+        )
+    }
+
     companion object {
         /** Kept for callers of the old API; see [CommitMessage.build]. */
         fun commitMessage(deviceName: String, changes: ChangeSet, now: LocalDateTime = LocalDateTime.now()): String =
@@ -270,6 +334,34 @@ class SyncEngine(
         }
 
         private fun plural(n: Int, word: String) = if (n == 1) word else "${word}s"
+
+        private fun sideLabel(side: Side): String = when (side) {
+            Side.PHONE -> "phone"
+            Side.REMOTE -> "remote"
+            Side.BOTH -> "both"
+        }
+
+        /** "kept phone: a.md, c.md · kept remote: b.md · kept both: d.md" (empty groups left out). */
+        internal fun describeChoices(choices: Map<String, Side>): String =
+            Side.values().mapNotNull { side ->
+                val paths = choices.filterValues { it == side }.keys.sorted()
+                if (paths.isEmpty()) null else "kept ${sideLabel(side)}: ${paths.joinToString(", ")}"
+            }.joinToString(" · ")
+
+        /** "Merge origin/main (resolved on Pixel)\n\nphone a.md\nremote b.md". */
+        internal fun resolveMessage(branch: String, deviceName: String, choices: Map<String, Side>): String =
+            "Merge ${GitRepo.REMOTE}/$branch (resolved on $deviceName)\n\n" +
+                choices.entries.sortedBy { it.key }.joinToString("\n") { (path, side) -> "${sideLabel(side)} $path" }
+
+        /** [tip] is a full sha; [pinned] may be full or abbreviated (at least 7 chars). */
+        internal fun sameCommit(tip: String?, pinned: String): Boolean =
+            tip != null && pinned.length >= 7 && tip.startsWith(pinned, ignoreCase = true)
+
+        /** Sha of refs/remotes/origin/<branch>, read through a separate short-lived repository handle. */
+        internal fun remoteTip(repoDir: File, branch: String): String? =
+            FileRepositoryBuilder().setGitDir(File(repoDir, Constants.DOT_GIT)).setMustExist(true).build().use { repo ->
+                repo.exactRef(Constants.R_REMOTES + GitRepo.REMOTE + "/" + branch)?.objectId?.name
+            }
 
         private fun closeQuietly(repo: GitRepo?) {
             try { repo?.close() } catch (_: Throwable) {}

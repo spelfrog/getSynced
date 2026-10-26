@@ -28,6 +28,8 @@ data class SyncRun(
     /** One line: "pushed 1, pulled 2, 0.9 s" or the headline error. */
     val summary: String = "",
     val finishedAt: Long? = null,
+    /** Set on CONFLICT runs: the files and the commits involved, for the Resolve card. */
+    val conflict: ConflictInfo? = null,
 ) {
     val id: Long get() = startedAt
     val isRunning: Boolean get() = outcome == SyncOutcome.RUNNING
@@ -45,4 +47,6 @@ data class SyncConfig(
     val branch: String? = null,
     /** Used as the commit subject prefix: "<deviceName>: edited note.md". */
     val deviceName: String = "android",
+    /** User's per-file choices for a pending conflict; applied only if remoteSha still matches origin. */
+    val resolution: Resolution? = null,
 )

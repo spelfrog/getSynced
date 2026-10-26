@@ -6,6 +6,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.spelfrog.getsynced.settings.AppSettings
 import dev.spelfrog.getsynced.settings.SettingsRepository
+import dev.spelfrog.getsynced.sync.ConflictChoices
+import dev.spelfrog.getsynced.sync.ConflictInfo
+import dev.spelfrog.getsynced.sync.Resolution
+import dev.spelfrog.getsynced.sync.Side
 import dev.spelfrog.getsynced.sync.SyncHistory
 import dev.spelfrog.getsynced.sync.StepState
 import dev.spelfrog.getsynced.sync.SyncRun
@@ -141,6 +145,15 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** "Resolve and sync": store the choices for the next worker run (pinned to the remote commit), then trigger it. */
+    fun resolve(info: ConflictInfo, choices: Map<String, Side>) {
+        val app = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            ConflictChoices.save(app, Resolution(info.remoteSha, choices))
+            SyncTrigger.enqueue(app, "resolve")
+        }
+    }
+
     private fun appLabel(pkg: String): String? {
         if (pkg.isBlank()) return null
         val pm = getApplication<Application>().packageManager
@@ -158,6 +171,7 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
             "close" to app.getString(R.string.status_trigger_close, name),
             "intent" to app.getString(R.string.status_trigger_intent),
             "clone" to app.getString(R.string.status_trigger_clone),
+            "resolve" to app.getString(R.string.status_trigger_resolve),
         )
     }
 

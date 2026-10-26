@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.map
 object SyncTrigger {
     const val WORK_NAME = "sync"
 
+    /** Trigger label of the run started by "Resolve and sync" (the choices themselves are in [ConflictChoices]). */
+    const val TRIGGER_RESOLVE = "resolve"
+
     /**
      * Enqueues one sync. If a sync is still waiting to start, this call is dropped (it will cover the
      * new trigger anyway). If one is already running, exactly one follow-up run is appended so edits

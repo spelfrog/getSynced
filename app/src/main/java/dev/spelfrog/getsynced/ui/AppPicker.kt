@@ -223,6 +223,16 @@ internal fun TriggerSection(form: SetupForm, onEdit: FormEdit, modifier: Modifie
             }
             Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        SwitchRow(stringResource(R.string.setup_toast_on_auto_sync), form.toastOnAutoSync) { v -> onEdit { it.copy(toastOnAutoSync = v) } }
+        Text(
+            if (form.triggerPackage.isBlank()) {
+                stringResource(R.string.setup_toast_on_auto_sync_hint_generic)
+            } else {
+                stringResource(R.string.setup_toast_on_auto_sync_hint, app?.label ?: form.triggerPackage)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 
     if (picking) {

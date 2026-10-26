@@ -110,6 +110,9 @@
     <string name="setup_trigger_hint_both">Opening or closing %1$s starts a sync.</string>
     <string name="setup_trigger_hint_open">Opening %1$s starts a sync.</string>
     <string name="setup_trigger_hint_close">Closing %1$s starts a sync.</string>
+    <string name="setup_toast_on_auto_sync">Show a toast for automatic syncs</string>
+    <string name="setup_toast_on_auto_sync_hint">Brief message when a sync starts and ends after opening or closing %1$s</string>
+    <string name="setup_toast_on_auto_sync_hint_generic">Brief message when a sync starts and ends after opening or closing the watched app</string>
     <string name="setup_trigger_hint_none">%1$s does not start a sync. Use the Sync button instead.</string>
     <string name="setup_app_picker_title">Choose app</string>
     <string name="setup_app_picker_search">Search apps</string>
