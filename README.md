@@ -12,8 +12,6 @@ both in the app and in the notification.
 (all releases: [Releases](https://github.com/spelfrog/getSynced/releases)). Open the file on the phone and allow
 installing from this source when asked. Updates install over the old version; settings are kept.
 
-The app is not on the Play Store because it needs *All files access* to run git on the vault folder.
-
 ## How a sync works
 
 1. **Check**: the repo exists, a remote and a token are configured, and the folder is writable. If not, the run
@@ -159,7 +157,6 @@ android {
 - Conflicts are detected and reported, not resolved automatically. Per-file "mine / theirs" resolution is planned.
 - No shallow clone (JGit 5.13 is used for compatibility with Android 8+), so the first clone downloads the full
   history.
-- Not on the Play Store: "All files access" (`MANAGE_EXTERNAL_STORAGE`) is not allowed there for this use case.
   Install from Releases or build it yourself.
 - Ideas for later: Quick Settings tile, multiple repos, optional periodic sync.
 
