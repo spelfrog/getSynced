@@ -62,11 +62,17 @@ data class StatusUiState(
     fun triggerLabel(trigger: String): String = triggerLabels[trigger] ?: trigger
 
     /** History without the run the header already shows. */
+    /** The History card shows the last few runs after the one in the header; the file keeps more for later. */
     val olderRuns: List<SyncRun>
         get() {
             val latestId = latest?.id
-            return if (latestId != null && history.firstOrNull()?.id == latestId) history.drop(1) else history
+            val older = if (latestId != null && history.firstOrNull()?.id == latestId) history.drop(1) else history
+            return older.take(HISTORY_SHOWN)
         }
+
+    companion object {
+        const val HISTORY_SHOWN = 5
+    }
 
     /** The step the live run is working on, null when idle. */
     val runningStep: SyncStep?
