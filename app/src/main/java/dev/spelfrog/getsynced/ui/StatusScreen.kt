@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -108,46 +110,86 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
         val latest = state.latest
         // Relative times ("3 min ago") refresh twice a minute.
         val now = rememberNow(30_000L)
-        Box(
+        val contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 16.dp + padding.calculateBottomPadding())
+        val onSync = { SyncTrigger.enqueue(context, "manual") }
+        BoxWithConstraints(
             Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()),
             contentAlignment = Alignment.TopCenter,
         ) {
-            LazyColumn(
-                // Phones fill the width (16 dp gutters); tablets and landscape get a readable column.
-                modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().fillMaxHeight(),
-                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 16.dp + padding.calculateBottomPadding()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (!state.isConfigured) {
-                    item(key = "setup") { NotSetUpCard(onOpenSetup) }
+            if (maxWidth >= TwoPaneMinWidth) {
+                // Tablets and landscape: status and steps on the left, commits and history on the right.
+                Row(
+                    Modifier.widthIn(max = ContentMaxWidth * 2).fillMaxWidth().fillMaxHeight(),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        contentPadding = contentPadding,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) { primaryItems(state, latest, now, onOpenSetup, onSync) }
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        contentPadding = contentPadding,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) { sideItems(state, now) }
                 }
-                item(key = "header") { HeaderCard(state, latest, now) }
-                if (latest != null && (latest.outcome == SyncOutcome.FAILED || latest.outcome == SyncOutcome.CONFLICT)) {
-                    val failedStep = latest.steps.lastOrNull { it.state == StepState.FAILED }
-                    val detail = failedStep?.detail?.takeIf { it.isNotBlank() } ?: latest.summary
-                    if (detail.isNotBlank()) {
-                        item(key = "error") { ErrorBlock(failedStep?.name, detail) }
-                    }
-                }
-                if (state.isConfigured) {
-                    item(key = "sync") { SyncButton(state) { SyncTrigger.enqueue(context, "manual") } }
-                }
-                if (latest != null && latest.steps.isNotEmpty()) {
-                    item(key = "steps") {
-                        SketchCard {
-                            StepList(latest.steps, Modifier.padding(16.dp))
-                        }
-                    }
-                }
-                if (state.commits.isNotEmpty()) {
-                    item(key = "commits") { CommitsCard(state.commits, now) }
-                }
-                val older = state.olderRuns
-                if (older.isNotEmpty()) {
-                    item(key = "history") { HistoryCard(older, state, now) }
+            } else {
+                LazyColumn(
+                    // Phones fill the width (16 dp gutters); narrow tablets get a readable column.
+                    modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().fillMaxHeight(),
+                    contentPadding = contentPadding,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    primaryItems(state, latest, now, onOpenSetup, onSync)
+                    sideItems(state, now)
                 }
             }
         }
+    }
+}
+
+/** Width from which the Status page splits into two columns. */
+private val TwoPaneMinWidth = 840.dp
+
+/** Status, error, Sync button and the steps of the latest run. */
+private fun LazyListScope.primaryItems(
+    state: StatusUiState,
+    latest: SyncRun?,
+    now: Long,
+    onOpenSetup: () -> Unit,
+    onSync: () -> Unit,
+) {
+    if (!state.isConfigured) {
+        item(key = "setup") { NotSetUpCard(onOpenSetup) }
+    }
+    item(key = "header") { HeaderCard(state, latest, now) }
+    if (latest != null && (latest.outcome == SyncOutcome.FAILED || latest.outcome == SyncOutcome.CONFLICT)) {
+        val failedStep = latest.steps.lastOrNull { it.state == StepState.FAILED }
+        val detail = failedStep?.detail?.takeIf { it.isNotBlank() } ?: latest.summary
+        if (detail.isNotBlank()) {
+            item(key = "error") { ErrorBlock(failedStep?.name, detail) }
+        }
+    }
+    if (state.isConfigured) {
+        item(key = "sync") { SyncButton(state, onSync) }
+    }
+    if (latest != null && latest.steps.isNotEmpty()) {
+        item(key = "steps") {
+            SketchCard {
+                StepList(latest.steps, Modifier.padding(16.dp))
+            }
+        }
+    }
+}
+
+/** Recent commits and older runs: below the steps on a phone, the right column on a tablet. */
+private fun LazyListScope.sideItems(state: StatusUiState, now: Long) {
+    if (state.commits.isNotEmpty()) {
+        item(key = "commits") { CommitsCard(state.commits, now) }
+    }
+    val older = state.olderRuns
+    if (older.isNotEmpty()) {
+        item(key = "history") { HistoryCard(older, state, now) }
     }
 }
 
