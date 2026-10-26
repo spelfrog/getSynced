@@ -76,6 +76,16 @@ The sign-in needs only a *Client ID*, which is public. Either a GitHub App or an
 
 Copy the app's **Client ID** into the setup screen. Tokens are revoked from *GitHub → Settings → Applications*.
 
+## Conflicts
+
+When a note was edited on both sides, the sync ends with **Conflict**. Nothing is merged and the vault stays
+exactly as it is: no conflict markers, your local commit is kept. The Status page then shows a *Resolve
+conflict* card listing each file. Tap *Show changes* to see what the local and the remote side changed
+(three-way diff against the common base), pick *Local*, *Remote* or *Both* per file (*Both* keeps the remote
+version and saves your copy as `name (local).md`), and tap *Resolve and sync*. The app creates a merge commit
+with both parents and pushes it, so the other version always stays in the git history. If the desktop resolves
+the conflict first, the next sync simply merges.
+
 ## Triggers
 
 - **App opened / closed**: when the watched app comes to the front, a sync runs (pull the latest changes). When

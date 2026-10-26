@@ -110,4 +110,28 @@
     <string name="about_check_failed">check failed: %1$s</string>
     <string name="about_check_now">Check for updates now</string>
     <string name="about_open_github">Open the getSynced page on GitHub</string>
+    <string name="diff_show_changes">Show changes</string>
+    <string name="diff_show_changes_cd">%1$s: show changes</string>
+    <string name="diff_tab_local">Local changes</string>
+    <string name="diff_tab_remote">Remote changes</string>
+    <string name="diff_tab_direct">Local vs remote</string>
+    <string name="diff_legend_added">+ added</string>
+    <string name="diff_legend_removed">− removed</string>
+    <string name="diff_legend_local">Edits made locally since the last shared version.</string>
+    <string name="diff_legend_remote">Edits made on the remote since the last shared version.</string>
+    <string name="diff_legend_direct">− only in the local version, + only in the remote version.</string>
+    <string name="diff_deleted_locally">The file was deleted locally.</string>
+    <string name="diff_deleted_on_remote">The file was deleted on the remote.</string>
+    <string name="diff_no_changes">No differences.</string>
+    <string name="diff_loading">Reading versions…</string>
+    <string name="diff_binary">This is a binary file; it cannot be shown as text.</string>
+    <string name="diff_truncated">Large file: only the first 200 KB of each version are compared.</string>
+    <string name="diff_error_title">Could not read the versions</string>
+    <string name="diff_error_no_repo">The vault folder is not a git repository.</string>
+    <string name="diff_added_line">added line</string>
+    <string name="diff_removed_line">removed line</string>
+    <plurals name="diff_collapsed">
+        <item quantity="one">··· %1$d unchanged line ···</item>
+        <item quantity="other">··· %1$d unchanged lines ···</item>
+    </plurals>
 </resources>

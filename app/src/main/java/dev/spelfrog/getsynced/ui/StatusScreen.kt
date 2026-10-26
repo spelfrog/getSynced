@@ -83,6 +83,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.spelfrog.getsynced.R
 import dev.spelfrog.getsynced.git.CommitInfo
+import dev.spelfrog.getsynced.sync.ConflictFile
 import dev.spelfrog.getsynced.sync.ConflictInfo
 import dev.spelfrog.getsynced.sync.Side
 import dev.spelfrog.getsynced.sync.StepState
@@ -109,6 +110,18 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     // Notification permission is asked for in the Setup checklist only.
+    var diffFile by remember { mutableStateOf<ConflictFile?>(null) }
+    val onShowDiff = { info: ConflictInfo, file: ConflictFile ->
+        diffFile = file
+        viewModel.showDiff(info, file)
+    }
+    diffFile?.let { file ->
+        val diffState by viewModel.diffState.collectAsStateWithLifecycle()
+        DiffSheet(file, diffState, onDismiss = {
+            diffFile = null
+            viewModel.clearDiff()
+        })
+    }
 
     Scaffold(
         topBar = {
@@ -142,7 +155,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) { primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve) }
+                    ) { primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve, onShowDiff) }
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = contentPadding,
@@ -156,7 +169,7 @@ fun StatusScreen(onOpenSetup: () -> Unit, viewModel: StatusViewModel = viewModel
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve)
+                    primaryItems(state, latest, now, onOpenSetup, onSync, viewModel::skipUpdate, viewModel::resolve, onShowDiff)
                     sideItems(state, now, commitLimit = 3, onCheckNow = viewModel::checkForUpdateNow)
                 }
             }
@@ -176,6 +189,7 @@ private fun LazyListScope.primaryItems(
     onSync: () -> Unit,
     onSkipUpdate: (ReleaseInfo) -> Unit,
     onResolve: (ConflictInfo, Map<String, Side>) -> Unit,
+    onShowDiff: (ConflictInfo, ConflictFile) -> Unit,
 ) {
     state.update?.let { release ->
         item(key = "update") { UpdateCard(release, onSkip = { onSkipUpdate(release) }) }
@@ -188,7 +202,12 @@ private fun LazyListScope.primaryItems(
     if (conflict != null) {
         // Stays visible (disabled) while a resolve run is queued or starting.
         item(key = "conflict") {
-            ConflictCard(conflict, busy = state.busy, onResolve = { choices -> onResolve(conflict, choices) })
+            ConflictCard(
+                conflict,
+                busy = state.busy,
+                onResolve = { choices -> onResolve(conflict, choices) },
+                onShowDiff = { file -> onShowDiff(conflict, file) },
+            )
         }
     } else if (latest != null && (latest.outcome == SyncOutcome.FAILED || latest.outcome == SyncOutcome.CONFLICT)) {
         val failedStep = latest.steps.lastOrNull { it.state == StepState.FAILED }

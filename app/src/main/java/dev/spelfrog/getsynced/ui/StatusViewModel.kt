@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import dev.spelfrog.getsynced.settings.AppSettings
 import dev.spelfrog.getsynced.settings.SettingsRepository
 import dev.spelfrog.getsynced.sync.ConflictChoices
+import dev.spelfrog.getsynced.sync.ConflictDiff
+import dev.spelfrog.getsynced.sync.ConflictFile
 import dev.spelfrog.getsynced.sync.ConflictInfo
 import dev.spelfrog.getsynced.sync.Resolution
 import dev.spelfrog.getsynced.sync.Side
@@ -30,6 +32,11 @@ import dev.spelfrog.getsynced.update.ReleaseInfo
 import dev.spelfrog.getsynced.update.UpdateInfo
 import dev.spelfrog.getsynced.update.UpdateState
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
@@ -152,6 +159,44 @@ class StatusViewModel(application: Application) : AndroidViewModel(application) 
             ConflictChoices.save(app, Resolution(info.remoteSha, choices))
             SyncTrigger.enqueue(app, "resolve")
         }
+    }
+
+    private val _diffState = MutableStateFlow<DiffState>(DiffState.Loading)
+
+    /** Diff of the file passed to [showDiff]; Loading until it is read. */
+    val diffState: StateFlow<DiffState> = _diffState.asStateFlow()
+    private var diffJob: Job? = null
+
+    /** "Show changes": reads the three versions of [file] (object reads only) and diffs them. */
+    fun showDiff(info: ConflictInfo, file: ConflictFile) {
+        diffJob?.cancel()
+        _diffState.value = DiffState.Loading
+        diffJob = viewModelScope.launch {
+            val path = settings.first().vaultPath
+            _diffState.value = withContext(Dispatchers.IO) { loadDiff(path, info, file) }
+        }
+    }
+
+    fun clearDiff() {
+        diffJob?.cancel()
+        diffJob = null
+        _diffState.value = DiffState.Loading
+    }
+
+    private fun loadDiff(vaultPath: String, info: ConflictInfo, file: ConflictFile): DiffState = try {
+        val dir = File(vaultPath)
+        if (vaultPath.isBlank() || !GitRepo.isRepo(dir)) {
+            DiffState.Error(getApplication<Application>().getString(R.string.diff_error_no_repo))
+        } else {
+            val versions = GitRepo(dir).use { it.conflictVersions(file.path, info.headSha, info.remoteSha) }
+            when {
+                versions.binary -> DiffState.Binary
+                versions.truncated -> DiffState.TooLarge(ConflictDiff.threeWay(versions))
+                else -> DiffState.Ready(ConflictDiff.threeWay(versions))
+            }
+        }
+    } catch (e: Exception) {
+        DiffState.Error(e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
     }
 
     private fun appLabel(pkg: String): String? {

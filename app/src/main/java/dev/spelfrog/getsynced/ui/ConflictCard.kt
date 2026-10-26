@@ -50,7 +50,12 @@ private val ChoicesSaver = Saver<Map<String, Side>, ArrayList<String>>(
  * "Resolve and sync". Choices live in the card, keyed by the remote commit they were made against.
  */
 @Composable
-fun ConflictCard(info: ConflictInfo, busy: Boolean, onResolve: (Map<String, Side>) -> Unit) {
+fun ConflictCard(
+    info: ConflictInfo,
+    busy: Boolean,
+    onResolve: (Map<String, Side>) -> Unit,
+    onShowDiff: (ConflictFile) -> Unit,
+) {
     val warning = MaterialTheme.sketch.warning
     var picked by rememberSaveable(info.remoteSha, stateSaver = ChoicesSaver) {
         mutableStateOf(info.files.associate { it.path to Side.LOCAL })
@@ -94,6 +99,7 @@ fun ConflictCard(info: ConflictInfo, busy: Boolean, onResolve: (Map<String, Side
                     selected = choices[file.path],
                     enabled = enabled,
                     onSelect = { side -> picked = picked + (file.path to side) },
+                    onShowDiff = { onShowDiff(file) },
                 )
             }
             Button(
@@ -106,7 +112,13 @@ fun ConflictCard(info: ConflictInfo, busy: Boolean, onResolve: (Map<String, Side
 }
 
 @Composable
-private fun ConflictFileRow(file: ConflictFile, selected: Side?, enabled: Boolean, onSelect: (Side) -> Unit) {
+private fun ConflictFileRow(
+    file: ConflictFile,
+    selected: Side?,
+    enabled: Boolean,
+    onSelect: (Side) -> Unit,
+    onShowDiff: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val name = file.path.substringAfterLast('/')
     val folder = file.path.substringBeforeLast('/', missingDelimiterValue = "")
@@ -136,7 +148,16 @@ private fun ConflictFileRow(file: ConflictFile, selected: Side?, enabled: Boolea
             )
             if (sizes.isNotEmpty()) add(sizes.joinToString(" · "))
         }
-        Text(details.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(details.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            if (!file.binary) {
+                val showCd = stringResource(R.string.diff_show_changes_cd, name)
+                TextButton(
+                    onClick = onShowDiff,
+                    modifier = Modifier.semantics { contentDescription = showCd },
+                ) { Text(stringResource(R.string.diff_show_changes)) }
+            }
+        }
 
         val options = buildList {
             add(Triple(Side.LOCAL, R.string.conflict_side_local, R.string.conflict_side_local_cd))
@@ -162,7 +183,7 @@ private fun ConflictFileRow(file: ConflictFile, selected: Side?, enabled: Boolea
     }
 }
 
-private fun kindText(kind: ConflictKind): Int = when (kind) {
+internal fun kindText(kind: ConflictKind): Int = when (kind) {
     ConflictKind.BOTH_MODIFIED -> R.string.conflict_kind_both_modified
     ConflictKind.BOTH_ADDED -> R.string.conflict_kind_both_added
     ConflictKind.DELETED_LOCALLY -> R.string.conflict_kind_deleted_locally

@@ -3,6 +3,9 @@ package dev.spelfrog.getsynced.git
 import dev.spelfrog.getsynced.sync.ChangeSet
 import dev.spelfrog.getsynced.sync.Side
 import dev.spelfrog.getsynced.sync.ConflictFile
+import dev.spelfrog.getsynced.sync.ConflictVersions
+import org.eclipse.jgit.diff.RawText
+import org.eclipse.jgit.lib.ObjectReader
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.MergeCommand
 import org.eclipse.jgit.api.MergeResult.MergeStatus
@@ -64,6 +67,9 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
         const val REMOTE = "origin"
         /** Network timeout in seconds for clone/fetch/push, so nothing hangs forever. */
         const val TIMEOUT_S = 60
+        /** Bytes read per side by [conflictVersions]. */
+        const val VERSION_CAP = 200 * 1024
+        private const val BINARY_PROBE = 8 * 1024
         private const val FETCH_SPEC = "+refs/heads/*:refs/remotes/origin/*"
 
         fun isRepo(dir: File): Boolean =
@@ -489,6 +495,57 @@ class GitRepo(val dir: File, var branch: String? = null) : AutoCloseable {
         } else {
             PushOutcome.UpToDate
         }
+    }
+
+    /**
+     * Texts of [path] at [headSha] (local), [remoteSha] (remote) and their merge base, read by object id only
+     * (no working tree or index access). Each side is capped at [VERSION_CAP] bytes (truncated = true);
+     * if any side looks binary (first 8 KB), returns binary = true with null texts.
+     */
+    fun conflictVersions(path: String, headSha: String, remoteSha: String): ConflictVersions {
+        RevWalk(repo).use { walk ->
+            val head = walk.parseCommit(ObjectId.fromString(headSha))
+            val remote = walk.parseCommit(ObjectId.fromString(remoteSha))
+            val baseTree = ConflictInspector.mergeBase(repo, head, remote)?.let { walk.parseCommit(it).tree }
+            val reader = walk.objectReader
+            val blobs = listOf(baseTree, head.tree, remote.tree).map { tree ->
+                tree?.let { ConflictInspector.blobAt(reader, path, it) }?.let { readCapped(reader, it) }
+            }
+            if (blobs.any { it?.binary == true }) {
+                return ConflictVersions(null, null, null, binary = true, truncated = false)
+            }
+            return ConflictVersions(
+                base = blobs[0]?.text,
+                local = blobs[1]?.text,
+                remote = blobs[2]?.text,
+                binary = false,
+                truncated = blobs.any { it?.truncated == true },
+            )
+        }
+    }
+
+    private class CappedBlob(val text: String?, val binary: Boolean, val truncated: Boolean)
+
+    private fun readCapped(reader: ObjectReader, blob: ObjectId): CappedBlob {
+        val buf = ByteArray(VERSION_CAP + 1)
+        var n = 0
+        reader.open(blob).openStream().use { input ->
+            while (n < buf.size) {
+                val r = input.read(buf, n, buf.size - n)
+                if (r < 0) break
+                n += r
+            }
+        }
+        if (RawText.isBinary(buf, minOf(n, BINARY_PROBE))) return CappedBlob(null, binary = true, truncated = false)
+        val truncated = n > VERSION_CAP
+        var len = minOf(n, VERSION_CAP)
+        if (truncated) {
+            // Cut at the last complete line so no line (or UTF-8 sequence) is shown half.
+            var lastLf = len - 1
+            while (lastLf >= 0 && buf[lastLf] != '\n'.code.toByte()) lastLf--
+            if (lastLf >= 0) len = lastLf + 1
+        }
+        return CappedBlob(String(buf, 0, len, Charsets.UTF_8), binary = false, truncated = truncated)
     }
 
     /** Newest [limit] commits of HEAD; empty for a repo without commits. */
